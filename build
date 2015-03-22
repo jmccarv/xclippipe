@@ -1,0 +1,3 @@
+#!/bin/bash
+
+gcc -Wall -o xclippipe xclippipe.c -lxcb -lX11 -lX11-xcb
