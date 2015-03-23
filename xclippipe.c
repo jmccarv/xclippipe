@@ -45,7 +45,7 @@ XrmDatabase default_opts = NULL;
 XrmDatabase opts = NULL;
 
 char *option_defaults[] = {
-    NULL, "-geometry", "50x50", "-bg", "black", 
+    NULL, "-geometry", "100x100", "-bg", "black", 
 };
 
 
