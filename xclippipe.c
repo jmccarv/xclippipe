@@ -10,6 +10,7 @@
 #include <X11/XKBlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xresource.h>
+#include <X11/Xutil.h>
 
 typedef enum xcp_atom_idx_t {
     WM_PROTOCOLS = 0,
@@ -288,9 +289,18 @@ xcb_alloc_named_color_reply_t *get_background_color () {
 }
 #endif
 
+typedef struct geom_t {
+    int x;
+    int y;
+    unsigned int width;
+    unsigned int height;
+    int flags;
+} geom_t;
+
 void xclippipe () {
     int done = 0;
     XColor bg;
+    geom_t g = { 0, 0, 0, 0 };
 
     intern_atoms();
 
@@ -309,8 +319,10 @@ void xclippipe () {
     //values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
     values[1] = XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
 
+    g.flags = XParseGeometry(get_resource("geometry","NULL"), &(g.x), &(g.y), &(g.width), &(g.height));
+
     xcb_create_window(c, XCB_COPY_FROM_PARENT, window, screen->root,
-                      0, 0, 150, 150, 10,
+                      g.x, g.y, g.width, g.height, 10,
                       XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
 
     /* set window title */
@@ -323,6 +335,14 @@ void xclippipe () {
     /* show window */
     xcb_map_window(c, window);
     xcb_flush(c);
+
+    /* make sure the window gets placed where the user wanted */
+    if (g.flags & ( XValue | YValue )) {
+        values[0] = g.x;
+        values[1] = g.y;
+        xcb_configure_window(c, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
+        xcb_flush(c);
+    }
 
     xcb_generic_event_t *event;
     while (!done && (event = xcb_wait_for_event(c))) {
