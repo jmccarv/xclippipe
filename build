@@ -1,3 +1,6 @@
 #!/bin/bash
 
-gcc -Wall -o xclippipe xclippipe.c -lxcb -lX11 -lX11-xcb
+# xcb-util for xcb_aux.h
+#gcc -Wall -o xclippipe xclippipe.c -lxcb -lX11 -lX11-xcb -lxcb-util
+
+gcc -Wall -o xclippipe xclippipe.c -lxcb -lX11 -lX11-xcb -lxcb-util

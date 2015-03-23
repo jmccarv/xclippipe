@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
+//#include <xcb/xcb_aux.h>
 #include <inttypes.h>
 #include <X11/Xlib.h>
 #include <X11/Xlib-xcb.h>
@@ -21,23 +22,54 @@ xcb_atom_t xcp_atom[4];
 
 Display *dpy;
 xcb_connection_t *c;
+xcb_screen_t     *screen;
 
 static XrmOptionDescRec opTable[] = {
-    { "-background",    "*background",  XrmoptionSepArg,    (XPointer) NULL  },
-    { "-bg",            "*background",  XrmoptionSepArg,    (XPointer) NULL  },
-    { "-display",       "*display",     XrmoptionSepArg,    (XPointer) NULL  },
-    { "-foreground",    "*foreground",  XrmoptionSepArg,    (XPointer) NULL  },
-    { "-fg",            "*foreground",  XrmoptionSepArg,    (XPointer) NULL  },
-    { "-geometry",      "*geometry",    XrmoptionSepArg,    (XPointer) NULL  },
-    { "-g",             "*geometry",    XrmoptionSepArg,    (XPointer) NULL  },
-    { "-name",          "*name",        XrmoptionSepArg,    (XPointer) NULL  },
-    { "-sticky",        "*sticky",      XrmoptionSepArg,    (XPointer) "on"  },
-    { "+sticky",        "*sticky",      XrmoptionSepArg,    (XPointer) "off" },
-    { "-title",         "*title",       XrmoptionSepArg,    (XPointer) NULL  },
+    { "-background",    ".background",  XrmoptionSepArg,    (XPointer) NULL  },
+    { "-bg",            ".background",  XrmoptionSepArg,    (XPointer) NULL  },
+    { "-borderless",    ".borderless",  XrmoptionNoArg,     (XPointer) "on"  },
+    { "+borderless",    ".borderless",  XrmoptionNoArg,     (XPointer) "off" },
+    { "-display",       ".display",     XrmoptionSepArg,    (XPointer) NULL  },
+    { "-geometry",      ".geometry",    XrmoptionSepArg,    (XPointer) NULL  },
+    { "-g",             ".geometry",    XrmoptionSepArg,    (XPointer) NULL  },
+    { "-sticky",        ".sticky",      XrmoptionNoArg,     (XPointer) "on"  },
+    { "+sticky",        ".sticky",      XrmoptionNoArg,     (XPointer) "off" },
+    { "-title",         ".title",       XrmoptionSepArg,    (XPointer) NULL  },
     { "-help",          NULL,           XrmoptionSkipArg,   (XPointer) NULL  },
     { "-version",       NULL,           XrmoptionSkipArg,   (XPointer) NULL  },
     { "-?",             NULL,           XrmoptionSkipArg,   (XPointer) NULL  },
 };
+
+XrmDatabase default_opts = NULL;
+XrmDatabase opts = NULL;
+
+char *option_defaults[] = {
+    NULL, "-geometry", "50x50", "-bg", "black", 
+};
+
+
+char res_name_buf[1024];
+char res_class_buf[1024];
+const char *get_resource (const char *name, const char *class) {
+    char res_name_buf[1024]  = "xclippipe.";
+    char res_class_buf[1024] = "XClipPipe.";
+    char *rec_type;
+    XrmValue rec_val;
+
+    strcat(res_name_buf, name);
+    strcat(res_class_buf, class ? class : name);
+
+    printf("gr(): Looking up: '%s'\n", res_name_buf);
+    XrmGetResource(opts, res_name_buf, res_class_buf, &rec_type, &rec_val);
+    printf("gr(): got: '%s'\n", rec_val.addr);
+
+    if (!rec_val.addr)
+        XrmGetResource(default_opts, res_name_buf, res_class_buf, &rec_type, &rec_val);
+    
+    printf("gr(): returning: '%s'\n", rec_val.addr);
+        
+    return(rec_val.addr);
+}
 
 xcb_screen_t *get_screen (int screen_num) {
     int i;
@@ -51,13 +83,6 @@ xcb_screen_t *get_screen (int screen_num) {
     }
 
     return (iter.data);
-}
-
-void redraw (xcb_window_t window, xcb_gcontext_t foreground) {
-    /*
-    xcb_rectangle_t rect;
-    xcb_poly_fill_rectangle(window->root, foreground, 
-    */
 }
 
 void ev_selection_notify (xcb_window_t window, xcb_selection_notify_event_t *event) {
@@ -198,27 +223,91 @@ void intern_atoms () {
     xcp_atom[_XCP_CLIP]        = intern_atom("_XCP_CLIP");
 }
 
+XColor *get_background_color (XColor *bg) {
+    XColor bg_exact;
+    const char *color_name = get_resource("background",NULL);
+    Status ret;
+
+    if (! (color_name && strlen(color_name)))
+        color_name = "black";
+
+    if (0 == (ret = XAllocNamedColor(dpy, DefaultColormap(dpy, DefaultScreen(dpy)), color_name, bg, &bg_exact))) {
+        fprintf(stderr, "Failed to get background color '%s'; defaulting to 'black'\n", color_name);
+        color_name = "black";
+        ret = XAllocNamedColor(dpy, DefaultColormap(dpy, DefaultScreen(dpy)), color_name, bg, &bg_exact);
+    }
+
+    if (0 == ret) {
+        fprintf(stderr, "Failed to get background color '%s'\n", color_name);
+        return NULL;
+    }
+
+    printf("gxbc(%d): color: %s  pixel=%lu  rgb: %hu %hu %hu\n",ret, color_name, bg->pixel, bg->red, bg->green, bg->blue);
+
+    return bg;
+}
+
+#if 0
+/* For whatever reason, ucb_aux_parse_color only seemed to work with '#rrggbb'
+ * syntax.  It doesn't work for plain names like 'blue' or the 'rgb:rr/gg/bb'
+ * syntax.  I'm probably just missing something but for now I'm just going to
+ * use XAllocNamedColor instead.
+ */
+xcb_alloc_named_color_reply_t *get_background_color () {
+    xcb_alloc_named_color_cookie_t anc;
+    xcb_alloc_named_color_reply_t *ancr;
+    const char *color_name = get_resource("background",NULL);
+
+    if (!color_name && !strlen(color_name))
+        color_name = "black";
+
+    uint16_t red=0, green=0, blue=0;
+    xcb_aux_parse_color(color_name, &red, &green, &blue);
+    printf("parsed '%s': %"PRIu16" %"PRIu16" %"PRIu16"\n", color_name, red, green, blue);
+    exit(1);
+
+    anc = xcb_alloc_named_color(c, screen->default_colormap, strlen(color_name), color_name);
+    xcb_flush(c);
+    ancr = xcb_alloc_named_color_reply(c, anc, NULL);
+
+    if (!ancr) {
+        fprintf(stderr, "Failed to get background color '%s'; defaulting to 'black'\n", color_name);
+        color_name = "black";
+        anc = xcb_alloc_named_color(c, screen->default_colormap, strlen(color_name), color_name);
+        xcb_flush(c);
+        ancr = xcb_alloc_named_color_reply(c, anc, NULL);
+    }
+
+    if (!ancr) {
+        fprintf(stderr, "Failed to get background color: %s\n", color_name);
+        return NULL;
+    }
+
+    //printf("pixel: %"PRIu32"  rgb: %"PRIu16" %"PRIu16" %"PRIu16"\n", ancr->pixel, ancr->visual_red, ancr->visual_green, ancr->visual_blue);
+    return ancr;
+}
+#endif
+
 void xclippipe () {
     int done = 0;
+    XColor bg;
 
     intern_atoms();
 
-    xcb_screen_t *screen = get_screen(DefaultScreen(dpy));
+    screen = get_screen(DefaultScreen(dpy));
 
-    /* create black (foreground) graphic cnotext */
-    xcb_drawable_t window = screen->root;
-    xcb_gcontext_t foreground = xcb_generate_id(c);
-    uint32_t       mask      = XCB_GC_FOREGROUND | XCB_GC_GRAPHICS_EXPOSURES;
-    uint32_t       values[2] = { screen->white_pixel, 0 };
-    xcb_create_gc(c, foreground, window, mask, values);
+    // allocate background color for window
+    if (NULL == get_background_color(&bg))
+        return;
 
-    /* create window */
-    window = xcb_generate_id(c);
+    // create window
+    xcb_window_t window = xcb_generate_id(c);
 
-    //printf("black=%d  white=%d\n", screen->black_pixel, screen->white_pixel);
-    mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-    values[0] = screen->black_pixel;
-    values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
+    uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+    uint32_t values[2];
+    values[0] = bg.pixel;
+    //values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
+    values[1] = XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
 
     xcb_create_window(c, XCB_COPY_FROM_PARENT, window, screen->root,
                       0, 0, 150, 150, 10,
@@ -228,7 +317,7 @@ void xclippipe () {
     char *title = "xclippipe";
     xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen(title), title);
 
-    /* Set up to handle clicking the close button */
+    /* set up to handle clicking the close button */
     xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, xcp_atom[WM_PROTOCOLS], 4, 32, 1, &xcp_atom[WM_DELETE_WINDOW]);
 
     /* show window */
@@ -239,9 +328,11 @@ void xclippipe () {
     while (!done && (event = xcb_wait_for_event(c))) {
         printf("Got Event\n");
         switch (event->response_type & ~0x80) {
+#if 0            
             case XCB_EXPOSE:
-                redraw(window, foreground);
+                //redraw(window, foreground);
                 break;
+#endif
 
             case XCB_SELECTION_NOTIFY:
                 ev_selection_notify(window, (xcb_selection_notify_event_t *)event);
@@ -265,11 +356,22 @@ void xclippipe () {
         free(event);
     }
 
+    XFreeColors(dpy, DefaultColormap(dpy, DefaultScreen(dpy)), &(bg.pixel), 1, 0);
     return;
 }
 
+void load_resources (int *argc, char **argv) {
+    opts = XrmGetStringDatabase(XResourceManagerString(dpy));
+
+    int c = sizeof(option_defaults)/sizeof(char *);
+    XrmParseCommand(&default_opts, opTable, sizeof(opTable)/sizeof(XrmOptionDescRec), "xclippipe", &c, option_defaults);
+
+    XrmParseCommand(&opts, opTable, sizeof(opTable)/sizeof(XrmOptionDescRec), "xclippipe", argc, argv);
+
+    XrmSetDatabase(dpy, opts);
+}
+
 int main (int argc, char **argv) {
-    
     dpy = XOpenDisplay(NULL);
     if (!dpy) {
         fprintf(stderr, "Could not open display\n");
@@ -282,8 +384,10 @@ int main (int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    //XrmInitialize();
-    //XrmParseCommand(NULL, opTable, 
+    XrmInitialize();
+
+    // Get resources from server and command line and get default options
+    load_resources(&argc, argv);
 
     xclippipe();
 
