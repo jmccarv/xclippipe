@@ -31,8 +31,12 @@ xcb_screen_t     *screen;
 xcb_window_t     window;
 
 static XrmOptionDescRec opTable[] = {
+    { "-above",         ".above",       XrmoptionNoArg,     (XPointer) "on"  },
+    { "+above",         ".above",       XrmoptionNoArg,     (XPointer) "off" },
     { "-background",    ".background",  XrmoptionSepArg,    (XPointer) NULL  },
     { "-bg",            ".background",  XrmoptionSepArg,    (XPointer) NULL  },
+    { "-below",         ".below",       XrmoptionNoArg,     (XPointer) "on"  },
+    { "+below",         ".below",       XrmoptionNoArg,     (XPointer) "off" },
     { "-borderless",    ".borderless",  XrmoptionNoArg,     (XPointer) "on"  },
     { "+borderless",    ".borderless",  XrmoptionNoArg,     (XPointer) "off" },
     { "-display",       ".display",     XrmoptionSepArg,    (XPointer) NULL  },
@@ -75,6 +79,15 @@ const char *get_resource (const char *name, const char *class) {
     printf("gr(): returning: '%s'\n", rec_val.addr);
         
     return(rec_val.addr);
+}
+
+int resource_true (const char *name) {
+    const char *res = get_resource(name, NULL);
+
+    if (res && 0 == strcmp("on",res))
+        return 1;
+
+    return 0;
 }
 
 xcb_screen_t *get_screen (int screen_num) {
@@ -297,6 +310,8 @@ xcb_alloc_named_color_reply_t *get_background_color () {
 
 void set_window_state () {
     /* set window state */
+    xcb_atom_t state[2];
+    uint32_t   nr_state = 0;
 
     xcb_ewmh_connection_t ewmh;
     memset(&ewmh, '\0', sizeof(xcb_ewmh_connection_t));
@@ -305,7 +320,19 @@ void set_window_state () {
 
     xcb_ewmh_init_atoms_replies(&ewmh, iac, NULL);
 
-    xcb_ewmh_set_wm_state(&ewmh, window, 1, &(ewmh._NET_WM_STATE_STICKY));
+    if (resource_true("sticky")) {
+        state[nr_state++] = ewmh._NET_WM_STATE_STICKY;
+    }
+
+
+    if (resource_true("above")) {
+        state[nr_state++] = ewmh._NET_WM_STATE_ABOVE;
+
+    } else if (resource_true("below")) {
+        state[nr_state++] = ewmh._NET_WM_STATE_BELOW;
+    }
+
+    xcb_ewmh_set_wm_state(&ewmh, window, nr_state, state);
     xcb_flush(c);
 
     xcb_ewmh_connection_wipe(&ewmh);
