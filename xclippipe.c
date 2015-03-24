@@ -1,10 +1,13 @@
+#include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
-//#include <xcb/xcb_aux.h>
 #include <inttypes.h>
 #include <X11/Xlib.h>
 #include <X11/Xlib-xcb.h>
@@ -25,59 +28,81 @@ typedef enum xcp_atom_idx_t {
 
 xcb_atom_t xcp_atom[4];
 
-Display *dpy;
+Display          *dpy;
 xcb_connection_t *c;
 xcb_screen_t     *screen;
 xcb_window_t     window;
 
+int             opt_stdout       = 0;
+int             opt_flush_stdout = 0;
+char            *opt_nl          = NULL;
+const char      *opt_run         = NULL;
+unsigned int    sig_chld         = 0;
+
 static XrmOptionDescRec opTable[] = {
-    { "-above",         ".above",       XrmoptionNoArg,     (XPointer) "on"  },
-    { "+above",         ".above",       XrmoptionNoArg,     (XPointer) "off" },
-    { "-background",    ".background",  XrmoptionSepArg,    (XPointer) NULL  },
-    { "-bg",            ".background",  XrmoptionSepArg,    (XPointer) NULL  },
-    { "-below",         ".below",       XrmoptionNoArg,     (XPointer) "on"  },
-    { "+below",         ".below",       XrmoptionNoArg,     (XPointer) "off" },
-    { "-borderless",    ".borderless",  XrmoptionNoArg,     (XPointer) "on"  },
-    { "+borderless",    ".borderless",  XrmoptionNoArg,     (XPointer) "off" },
-    { "-display",       ".display",     XrmoptionSepArg,    (XPointer) NULL  },
-    { "-geometry",      ".geometry",    XrmoptionSepArg,    (XPointer) NULL  },
-    { "-g",             ".geometry",    XrmoptionSepArg,    (XPointer) NULL  },
-    { "-sticky",        ".sticky",      XrmoptionNoArg,     (XPointer) "on"  },
-    { "+sticky",        ".sticky",      XrmoptionNoArg,     (XPointer) "off" },
-    { "-title",         ".title",       XrmoptionSepArg,    (XPointer) NULL  },
-    { "-help",          NULL,           XrmoptionSkipArg,   (XPointer) NULL  },
-    { "-version",       NULL,           XrmoptionSkipArg,   (XPointer) NULL  },
-    { "-?",             NULL,           XrmoptionSkipArg,   (XPointer) NULL  },
+    { "-above",         ".above",           XrmoptionNoArg,     (XPointer) "on"  },
+    { "+above",         ".above",           XrmoptionNoArg,     (XPointer) "off" },
+    { "-background",    ".background",      XrmoptionSepArg,    (XPointer) NULL  },
+    { "-bg",            ".background",      XrmoptionSepArg,    (XPointer) NULL  },
+    { "-below",         ".below",           XrmoptionNoArg,     (XPointer) "on"  },
+    { "+below",         ".below",           XrmoptionNoArg,     (XPointer) "off" },
+    { "-borderless",    ".borderless",      XrmoptionNoArg,     (XPointer) "on"  },
+    { "+borderless",    ".borderless",      XrmoptionNoArg,     (XPointer) "off" },
+    { "-display",       ".display",         XrmoptionSepArg,    (XPointer) NULL  },
+    { "-debug",         ".debug",           XrmoptionNoArg,     (XPointer) "on"  },
+    { "+debug",         ".debug",           XrmoptionNoArg,     (XPointer) "off"  },
+    { "-flush-stdout",  ".flush-stdout",    XrmoptionNoArg,     (XPointer) "on"  },
+    { "+flush-stdout",  ".flush-stdout",    XrmoptionNoArg,     (XPointer) "off" },
+    { "-geometry",      ".geometry",        XrmoptionSepArg,    (XPointer) NULL  },
+    { "-g",             ".geometry",        XrmoptionSepArg,    (XPointer) NULL  },
+    { "-nl",            ".newline",         XrmoptionNoArg,     (XPointer) "on"  },
+    { "+nl",            ".newline",         XrmoptionNoArg,     (XPointer) "off" },
+    { "-run",           ".run",             XrmoptionSepArg,    (XPointer) NULL  },
+    { "-r",             ".run",             XrmoptionSepArg,    (XPointer) NULL  },
+    { "-stdout",        ".stdout",          XrmoptionNoArg,     (XPointer) "on"  },
+    { "+stdout",        ".stdout",          XrmoptionNoArg,     (XPointer) "off" },
+    { "-s",             ".stdout",          XrmoptionNoArg,     (XPointer) "on"  },
+    { "+s",             ".stdout",          XrmoptionNoArg,     (XPointer) "off" },
+    { "-sticky",        ".sticky",          XrmoptionNoArg,     (XPointer) "on"  },
+    { "+sticky",        ".sticky",          XrmoptionNoArg,     (XPointer) "off" },
+    { "-title",         ".title",           XrmoptionSepArg,    (XPointer) NULL  },
+    { "-help",          NULL,               XrmoptionSkipArg,   (XPointer) NULL  },
+    { "-version",       NULL,               XrmoptionSkipArg,   (XPointer) NULL  },
+    { "-?",             NULL,               XrmoptionSkipArg,   (XPointer) NULL  },
 };
 
 XrmDatabase default_opts = NULL;
 XrmDatabase opts = NULL;
 
 char *option_defaults[] = {
-    NULL, "-g", "100x100", "-bg", "black", "+borderless", "-title", "xclippipe", 
+    NULL, "-g", "100x100", "-bg", "black", "-title", "xclippipe", "-stdout", "-flush-stdout", "-nl"
 };
 
+void debug (const char *fmt, ...) {
+    va_list ap;
 
-char res_name_buf[1024];
-char res_class_buf[1024];
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+}
+
+#define RES_BUF_SIZE 1024
+char res_name_buf[RES_BUF_SIZE];
+char res_class_buf[RES_BUF_SIZE];
 const char *get_resource (const char *name, const char *class) {
-    char res_name_buf[1024]  = "xclippipe.";
-    char res_class_buf[1024] = "XClipPipe.";
+    char res_name_buf[RES_BUF_SIZE]  = "xclippipe.";
+    char res_class_buf[RES_BUF_SIZE] = "XClipPipe.";
     char *rec_type;
     XrmValue rec_val;
 
-    strcat(res_name_buf, name);
-    strcat(res_class_buf, class ? class : name);
+    strncat(res_name_buf,  name,                 RES_BUF_SIZE-strlen(res_name_buf)-1);
+    strncat(res_class_buf, class ? class : name, RES_BUF_SIZE-strlen(res_class_buf)-1);
 
-    printf("gr(): Looking up: '%s'\n", res_name_buf);
     XrmGetResource(opts, res_name_buf, res_class_buf, &rec_type, &rec_val);
-    printf("gr(): got: '%s'\n", rec_val.addr);
 
     if (!rec_val.addr)
         XrmGetResource(default_opts, res_name_buf, res_class_buf, &rec_type, &rec_val);
     
-    printf("gr(): returning: '%s'\n", rec_val.addr);
-        
     return(rec_val.addr);
 }
 
@@ -104,10 +129,76 @@ xcb_screen_t *get_screen (int screen_num) {
     return (iter.data);
 }
 
+void do_child_command(xcb_get_property_reply_t *prop, int len) {
+    FILE *fh;
+    int  rc;
+
+    struct sigaction sigact_chld;
+
+    memset(&sigact_chld, '\0', sizeof(struct sigaction));
+    sigact_chld.sa_handler = SIG_DFL;
+    sigemptyset(&sigact_chld.sa_mask);
+    sigaction (SIGCHLD, &sigact_chld, NULL);
+
+    if (NULL == (fh = popen(opt_run, "w"))) {
+        fprintf(stderr, "Failed to run command '%s': ", opt_run);
+        perror(NULL);
+        return;
+    }
+    
+    fprintf(fh,"%*s%s", len,(char *)xcb_get_property_value(prop), opt_nl);
+
+    if (-1 == (rc = pclose(fh))) {
+        fprintf(stderr, "Command '%s' failed upon pclose(): ", opt_run);
+        perror(NULL);
+        return;
+    }
+
+    if (rc) {
+        fprintf(stderr, "Command '%s' terminated with error code: %d", opt_run, WEXITSTATUS(rc));
+        
+        if (WIFSIGNALED(rc))
+            fprintf(stderr, " (signaled with %d)", WTERMSIG(rc));
+
+        if (WCOREDUMP(rc))
+            fprintf(stderr, " (core dumped)");
+
+        fprintf(stderr,"\n");
+    }
+}
+
+void run_command (xcb_get_property_reply_t *prop) {
+    pid_t child;
+
+    if (! (opt_run && strlen(opt_run))) return;
+    if (!prop)                          return;
+
+    int len   = xcb_get_property_value_length(prop);
+    if (len < 1) return;
+
+    switch(child = fork()) {
+        case -1:
+            fprintf(stderr, "Failed to fork() to run command '%s': %s\n", opt_run, strerror(errno));
+            break;
+
+        case 0:
+            break;
+
+        default:
+            debug("forked() child: %d\n", child);
+            return;
+    }
+
+    fclose(stdin);
+    fclose(stdout);
+    do_child_command(prop, len);
+
+    exit(0);
+}
+
 void ev_selection_notify (xcb_selection_notify_event_t *event) {
     xcb_get_property_cookie_t prop_cookie;
     xcb_get_property_reply_t  *prop;
-    //char *str;
 
     prop_cookie = xcb_get_property(c, False, window, event->property, XCB_ATOM_STRING, 0, UINT32_MAX);
     prop        = xcb_get_property_reply(c, prop_cookie, NULL);
@@ -118,8 +209,8 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     }
 
     
-    printf("Got property reply\n");
-    printf("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
+    debug("Got property reply\n");
+    debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
            prop->type, prop->format, prop->sequence, prop->length, prop->type, prop->bytes_after, prop->value_len);
 
     if (prop->value_len < 1) {
@@ -130,19 +221,17 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     
 
     if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
-        /*
-        if (NULL == (str = malloc(prop->value_len+1))) {
-            fprintf(stderr, "Failed to malloc() memory\n");
-            free(prop);
-            return;
+        debug("Got String: %*s\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
+        if (opt_stdout) {
+            printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt_nl);
+
+            if (opt_flush_stdout) 
+                fflush(stdout);
         }
 
-        memset(str, '\0', prop->value_len);
-        memcpy(str, (char *)xcb_get_property_value(prop), prop->value_len);
-
-        printf("Got String: %s\n", str);
-        */
-        printf("Got String: %*s\n", prop->value_len,(char *)xcb_get_property_value(prop));
+        if (opt_run) {
+            run_command(prop);
+        }
 
     } else {
         fprintf(stderr, "Got something that's not a string; ignoring\n");
@@ -157,14 +246,11 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     xcb_delete_property(c, window, event->property);
 }
 
-
-void ev_button_press (xcb_button_press_event_t *event) {
+void request_selection (xcb_atom_t selection) {
     xcb_get_selection_owner_cookie_t cookie;
     xcb_get_selection_owner_reply_t *reply;
 
-    if (event->detail != 2) return;
-
-    cookie = xcb_get_selection_owner(c, XCB_ATOM_PRIMARY);
+    cookie = xcb_get_selection_owner(c, selection);
     reply  = xcb_get_selection_owner_reply(c, cookie, NULL);
 
     if (reply->owner == None) {
@@ -172,9 +258,22 @@ void ev_button_press (xcb_button_press_event_t *event) {
         return;
     }
 
-    xcb_convert_selection(c, window, XA_PRIMARY, XA_STRING, xcp_atom[_XCP_CLIP], CurrentTime);
+    xcb_convert_selection(c, window, selection, XCB_ATOM_STRING, xcp_atom[_XCP_CLIP], CurrentTime);
     xcb_flush(c);
     free(reply);
+}
+
+void ev_button_press (xcb_button_press_event_t *event) {
+    if (event->detail != 2 && event->detail != 3) return;
+    switch (event->detail) {
+        case 2:
+            request_selection(XCB_ATOM_PRIMARY);
+            break;
+
+        case 3:
+            request_selection(xcp_atom[CLIPBOARD]);
+            break;
+    }
 }
 
 void send_close_message () {
@@ -194,8 +293,6 @@ void send_close_message () {
 
 void ev_key_press (xcb_key_press_event_t *event) {
     KeySym ks = XkbKeycodeToKeysym(dpy, event->detail, 0, 0);
-    xcb_get_selection_owner_cookie_t cookie;
-    xcb_get_selection_owner_reply_t *reply;
 
     char *ch = XKeysymToString(ks);
 
@@ -208,16 +305,7 @@ void ev_key_press (xcb_key_press_event_t *event) {
             break;
 
         case 'v':
-            cookie = xcb_get_selection_owner(c, xcp_atom[CLIPBOARD]);
-            reply  = xcb_get_selection_owner_reply(c, cookie, NULL);
-            
-            if (reply->owner != None) {
-                printf("owner=%d\n", reply->owner);
-                xcb_convert_selection(c, window, xcp_atom[CLIPBOARD], XA_STRING, xcp_atom[_XCP_CLIP], CurrentTime);
-                xcb_flush(c);
-            }
-
-            free(reply);
+            request_selection(xcp_atom[CLIPBOARD]);
             break;
     }
 }
@@ -231,7 +319,7 @@ xcb_atom_t intern_atom (const char *atom) {
 
     cookie = xcb_intern_atom(c, 0, strlen(atom), atom);
     reply  = xcb_intern_atom_reply(c, cookie, NULL);
-    printf("intern %s => %d\n", atom, reply->atom);
+    debug("intern %s => %d\n", atom, reply->atom);
     return reply->atom;
 }
 
@@ -243,6 +331,11 @@ void intern_atoms () {
     xcp_atom[_MOTIF_WM_HINTS]  = intern_atom("_MOTIF_WM_HINTS");
 }
 
+/* For whatever reason, ucb_aux_parse_color only seemed to work with '#rrggbb'
+ * syntax.  It doesn't work for plain names like 'blue' or the 'rgb:rr/gg/bb'
+ * syntax.  I'm probably just missing something but for now I'm just going to
+ * use XAllocNamedColor instead.
+ */
 XColor *get_background_color (XColor *bg) {
     XColor bg_exact;
     const char *color_name = get_resource("background",NULL);
@@ -262,51 +355,10 @@ XColor *get_background_color (XColor *bg) {
         return NULL;
     }
 
-    printf("gxbc(%d): color: %s  pixel=%lu  rgb: %hu %hu %hu\n",ret, color_name, bg->pixel, bg->red, bg->green, bg->blue);
+    debug("gxbc(%d): color: %s  pixel=%lu  rgb: %hu %hu %hu\n",ret, color_name, bg->pixel, bg->red, bg->green, bg->blue);
 
     return bg;
 }
-
-#if 0
-/* For whatever reason, ucb_aux_parse_color only seemed to work with '#rrggbb'
- * syntax.  It doesn't work for plain names like 'blue' or the 'rgb:rr/gg/bb'
- * syntax.  I'm probably just missing something but for now I'm just going to
- * use XAllocNamedColor instead.
- */
-xcb_alloc_named_color_reply_t *get_background_color () {
-    xcb_alloc_named_color_cookie_t anc;
-    xcb_alloc_named_color_reply_t *ancr;
-    const char *color_name = get_resource("background",NULL);
-
-    if (!color_name && !strlen(color_name))
-        color_name = "black";
-
-    uint16_t red=0, green=0, blue=0;
-    xcb_aux_parse_color(color_name, &red, &green, &blue);
-    printf("parsed '%s': %"PRIu16" %"PRIu16" %"PRIu16"\n", color_name, red, green, blue);
-    exit(1);
-
-    anc = xcb_alloc_named_color(c, screen->default_colormap, strlen(color_name), color_name);
-    xcb_flush(c);
-    ancr = xcb_alloc_named_color_reply(c, anc, NULL);
-
-    if (!ancr) {
-        fprintf(stderr, "Failed to get background color '%s'; defaulting to 'black'\n", color_name);
-        color_name = "black";
-        anc = xcb_alloc_named_color(c, screen->default_colormap, strlen(color_name), color_name);
-        xcb_flush(c);
-        ancr = xcb_alloc_named_color_reply(c, anc, NULL);
-    }
-
-    if (!ancr) {
-        fprintf(stderr, "Failed to get background color: %s\n", color_name);
-        return NULL;
-    }
-
-    //printf("pixel: %"PRIu32"  rgb: %"PRIu16" %"PRIu16" %"PRIu16"\n", ancr->pixel, ancr->visual_red, ancr->visual_green, ancr->visual_blue);
-    return ancr;
-}
-#endif
 
 void set_window_state () {
     /* set window state */
@@ -406,7 +458,7 @@ void xclippipe () {
 
     xcb_generic_event_t *event;
     while (!done && (event = xcb_wait_for_event(c))) {
-        printf("Got Event\n");
+        debug("Got Event\n");
         switch (event->response_type & ~0x80) {
 #if 0            
             case XCB_EXPOSE:
@@ -453,6 +505,8 @@ void load_resources (int *argc, char **argv) {
 
 int main (int argc, char **argv) {
     dpy = XOpenDisplay(NULL);
+    struct sigaction sigact_chld;
+
     if (!dpy) {
         fprintf(stderr, "Could not open display\n");
         exit(EXIT_FAILURE);
@@ -468,6 +522,19 @@ int main (int argc, char **argv) {
 
     // Get resources from server and command line and get default options
     load_resources(&argc, argv);
+    opt_nl           = resource_true("newline") ? "\n" : "";
+    opt_stdout       = resource_true("stdout");
+    opt_flush_stdout = resource_true("flush-stdout");
+    opt_run          = get_resource("run",NULL);
+
+    if (!opt_stdout) 
+        fclose(stdout);
+
+    memset(&sigact_chld, '\0', sizeof(struct sigaction));
+    sigact_chld.sa_flags = SA_NOCLDWAIT | SA_NOCLDSTOP;
+    sigact_chld.sa_handler = SIG_DFL;
+    sigemptyset(&sigact_chld.sa_mask);
+    sigaction (SIGCHLD, &sigact_chld, NULL);
 
     xclippipe();
 
