@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
+#include <xcb/xcb_ewmh.h>
 //#include <xcb/xcb_aux.h>
 #include <inttypes.h>
 #include <X11/Xlib.h>
@@ -12,11 +13,14 @@
 #include <X11/Xresource.h>
 #include <X11/Xutil.h>
 
+#include "motif_window_hints.h"
+
 typedef enum xcp_atom_idx_t {
     WM_PROTOCOLS = 0,
     WM_DELETE_WINDOW = 1,
     CLIPBOARD = 2,
-    _XCP_CLIP = 3
+    _XCP_CLIP = 3,
+    _MOTIF_WM_HINTS = 4
 } xcp_atom_idx_t;
 
 xcb_atom_t xcp_atom[4];
@@ -24,6 +28,7 @@ xcb_atom_t xcp_atom[4];
 Display *dpy;
 xcb_connection_t *c;
 xcb_screen_t     *screen;
+xcb_window_t     window;
 
 static XrmOptionDescRec opTable[] = {
     { "-background",    ".background",  XrmoptionSepArg,    (XPointer) NULL  },
@@ -45,7 +50,7 @@ XrmDatabase default_opts = NULL;
 XrmDatabase opts = NULL;
 
 char *option_defaults[] = {
-    NULL, "-geometry", "100x100", "-bg", "black", 
+    NULL, "-g", "100x100", "-bg", "black", "+borderless", "-title", "xclippipe", 
 };
 
 
@@ -86,7 +91,7 @@ xcb_screen_t *get_screen (int screen_num) {
     return (iter.data);
 }
 
-void ev_selection_notify (xcb_window_t window, xcb_selection_notify_event_t *event) {
+void ev_selection_notify (xcb_selection_notify_event_t *event) {
     xcb_get_property_cookie_t prop_cookie;
     xcb_get_property_reply_t  *prop;
     //char *str;
@@ -140,7 +145,7 @@ void ev_selection_notify (xcb_window_t window, xcb_selection_notify_event_t *eve
 }
 
 
-void ev_button_press (xcb_window_t window, xcb_button_press_event_t *event) {
+void ev_button_press (xcb_button_press_event_t *event) {
     xcb_get_selection_owner_cookie_t cookie;
     xcb_get_selection_owner_reply_t *reply;
 
@@ -159,7 +164,7 @@ void ev_button_press (xcb_window_t window, xcb_button_press_event_t *event) {
     free(reply);
 }
 
-void send_close_message (xcb_window_t window) {
+void send_close_message () {
     xcb_client_message_event_t *event = calloc(32, 1);
     
     event->response_type  = XCB_CLIENT_MESSAGE;
@@ -174,7 +179,7 @@ void send_close_message (xcb_window_t window) {
     free(event);
 }
 
-void ev_key_press (xcb_window_t window, xcb_key_press_event_t *event) {
+void ev_key_press (xcb_key_press_event_t *event) {
     KeySym ks = XkbKeycodeToKeysym(dpy, event->detail, 0, 0);
     xcb_get_selection_owner_cookie_t cookie;
     xcb_get_selection_owner_reply_t *reply;
@@ -186,7 +191,7 @@ void ev_key_press (xcb_window_t window, xcb_key_press_event_t *event) {
 
     switch (*ch) {
         case 'd':
-            send_close_message(window);
+            send_close_message();
             break;
 
         case 'v':
@@ -222,6 +227,7 @@ void intern_atoms () {
     xcp_atom[WM_DELETE_WINDOW] = intern_atom("WM_DELETE_WINDOW");
     xcp_atom[CLIPBOARD]        = intern_atom("CLIPBOARD");
     xcp_atom[_XCP_CLIP]        = intern_atom("_XCP_CLIP");
+    xcp_atom[_MOTIF_WM_HINTS]  = intern_atom("_MOTIF_WM_HINTS");
 }
 
 XColor *get_background_color (XColor *bg) {
@@ -289,6 +295,31 @@ xcb_alloc_named_color_reply_t *get_background_color () {
 }
 #endif
 
+void set_window_state () {
+    /* set window state */
+
+    xcb_ewmh_connection_t ewmh;
+    memset(&ewmh, '\0', sizeof(xcb_ewmh_connection_t));
+    xcb_intern_atom_cookie_t *iac = xcb_ewmh_init_atoms(c, &ewmh);
+    xcb_flush(c);
+
+    xcb_ewmh_init_atoms_replies(&ewmh, iac, NULL);
+
+    xcb_ewmh_set_wm_state(&ewmh, window, 1, &(ewmh._NET_WM_STATE_STICKY));
+    xcb_flush(c);
+
+    xcb_ewmh_connection_wipe(&ewmh);
+
+
+    /* borderless? */
+    if (0 == strcmp (get_resource("borderless",NULL), "on")){
+        mwm_hints_t hints;
+        hints.flags = MWM_HINTS_DECORATIONS;
+        hints.decorations = MWM_DECOR_NONE;
+        xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, xcp_atom[_MOTIF_WM_HINTS], xcp_atom[_MOTIF_WM_HINTS], 32, 5, &hints);
+    }
+}
+
 typedef struct geom_t {
     int x;
     int y;
@@ -311,7 +342,7 @@ void xclippipe () {
         return;
 
     // create window
-    xcb_window_t window = xcb_generate_id(c);
+    window = xcb_generate_id(c);
 
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
     uint32_t values[2];
@@ -326,23 +357,26 @@ void xclippipe () {
                       XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, mask, values);
 
     /* set window title */
-    char *title = "xclippipe";
+    const char *title = get_resource("title", NULL);
     xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen(title), title);
+
+    set_window_state();
+    
 
     /* set up to handle clicking the close button */
     xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, xcp_atom[WM_PROTOCOLS], 4, 32, 1, &xcp_atom[WM_DELETE_WINDOW]);
 
     /* show window */
     xcb_map_window(c, window);
-    xcb_flush(c);
 
     /* make sure the window gets placed where the user wanted */
     if (g.flags & ( XValue | YValue )) {
         values[0] = g.x;
         values[1] = g.y;
         xcb_configure_window(c, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, values);
-        xcb_flush(c);
     }
+
+    xcb_flush(c);
 
     xcb_generic_event_t *event;
     while (!done && (event = xcb_wait_for_event(c))) {
@@ -355,7 +389,7 @@ void xclippipe () {
 #endif
 
             case XCB_SELECTION_NOTIFY:
-                ev_selection_notify(window, (xcb_selection_notify_event_t *)event);
+                ev_selection_notify((xcb_selection_notify_event_t *)event);
                 break;
 
             case XCB_CLIENT_MESSAGE:
@@ -365,11 +399,11 @@ void xclippipe () {
                 break;
 
             case XCB_BUTTON_PRESS:
-                ev_button_press(window, (xcb_button_press_event_t *)event);
+                ev_button_press((xcb_button_press_event_t *)event);
                 break;
 
             case XCB_KEY_PRESS:
-                ev_key_press(window, (xcb_key_press_event_t *)event);
+                ev_key_press((xcb_key_press_event_t *)event);
                 break;
         }
         
