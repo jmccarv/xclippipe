@@ -333,18 +333,17 @@ void set_window_state () {
     }
 
     xcb_ewmh_set_wm_state(&ewmh, window, nr_state, state);
-    xcb_flush(c);
-
-    xcb_ewmh_connection_wipe(&ewmh);
-
+    //xcb_flush(c);
 
     /* borderless? */
-    if (0 == strcmp (get_resource("borderless",NULL), "on")){
+    if (resource_true("borderless")) {
         mwm_hints_t hints;
         hints.flags = MWM_HINTS_DECORATIONS;
         hints.decorations = MWM_DECOR_NONE;
         xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, xcp_atom[_MOTIF_WM_HINTS], xcp_atom[_MOTIF_WM_HINTS], 32, 5, &hints);
     }
+
+    xcb_ewmh_connection_wipe(&ewmh);
 }
 
 typedef struct geom_t {
