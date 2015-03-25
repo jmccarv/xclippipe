@@ -17,7 +17,7 @@
 #include <X11/Xresource.h>
 #include <X11/Xutil.h>
 
-#include "motif_window_hints.h"
+#include <motif_window_hints.h>
 
 typedef enum xcp_atom_idx_t {
     WM_PROTOCOLS = 0,
@@ -58,13 +58,14 @@ typedef struct xcp_options_t {
     int                 debug;
     char                *nl;
     const char          *run;
-    /* The following are null-terminated lists */
+
+    /* The following lists terminated with a .valid structure member of 0 */
     xcp_action_elem_t   *act_clipboard;
     xcp_action_elem_t   *act_primary;
     xcp_action_elem_t   *act_exit;
 } xcp_options_t;
 
-xcp_options_t opt = { 0, 0, 0, NULL, NULL };
+xcp_options_t opt = { 0, 0, 0, NULL, NULL, NULL, NULL, NULL };
 
 
 static XrmOptionDescRec opTable[] = {
