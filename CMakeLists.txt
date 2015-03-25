@@ -11,6 +11,6 @@ find_package(XCB REQUIRED)
 
 include_directories(${X11_INCLUDE_DIRS} ${XCB_INCLUDE_DIRS})
 
-add_definitions ("-Wall")
+add_definitions (-Wall -DVERSION_MAJOR=${VERSION_MAJOR} -DVERSION_MINOR=${VERSION_MINOR})
 
 add_subdirectory("src")
