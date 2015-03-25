@@ -245,9 +245,10 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
         return;
     }
 
-    
-    //debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
+    /*
+    debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
            prop->type, prop->format, prop->sequence, prop->length, prop->type, prop->bytes_after, prop->value_len);
+    */
 
     if (prop->value_len < 1) {
         fprintf(stderr, "Property reply was zero length\n");
@@ -378,7 +379,7 @@ void ev_key_press (xcb_key_press_event_t *event) {
     if (IsModifierKey(ks)) return;
 
     if (event->state & XCB_KEY_BUT_MASK_SHIFT)    debug("shift+");
-    if (event->state & XCB_KEY_BUT_MASK_LOCK)     debug("caps+");
+    if (event->state & XCB_KEY_BUT_MASK_LOCK)     debug("lock+");
     if (event->state & XCB_KEY_BUT_MASK_CONTROL)  debug("ctrl+");
     if (event->state & XCB_KEY_BUT_MASK_MOD_1)    debug("mod1+");
     if (event->state & XCB_KEY_BUT_MASK_MOD_2)    debug("mod2+");
