@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
@@ -33,53 +34,89 @@ xcb_connection_t *c;
 xcb_screen_t     *screen;
 xcb_window_t     window;
 
-int             opt_stdout       = 0;
-int             opt_flush_stdout = 0;
-char            *opt_nl          = NULL;
-const char      *opt_run         = NULL;
-unsigned int    sig_chld         = 0;
+typedef enum xcp_action_t {
+    XCP_ACTION_NONE = 0,
+    XCP_ACTION_CLIPBOARD = 1,
+    XCP_ACTION_PRIMARY = 2,
+    XCP_ACTION_EXIT = 3
+} xcp_action_t;
+
+typedef struct xcp_action_elem_t {
+    char            *ks_string;
+    int             button;
+    xcb_keycode_t   mod_mask;
+    int             valid;
+} xcp_action_elem_t;
+
+/* A place to cache resource settings so we don't
+ * have to do a lot of resource lookups in the server.
+ * Only frequently used options need be here.
+ */
+typedef struct xcp_options_t {
+    int                 o_stdout;
+    int                 flush_stdout;
+    int                 debug;
+    char                *nl;
+    const char          *run;
+    /* The following are null-terminated lists */
+    xcp_action_elem_t   *act_clipboard;
+    xcp_action_elem_t   *act_primary;
+    xcp_action_elem_t   *act_exit;
+} xcp_options_t;
+
+xcp_options_t opt = { 0, 0, 0, NULL, NULL };
+
 
 static XrmOptionDescRec opTable[] = {
-    { "-above",         ".above",           XrmoptionNoArg,     (XPointer) "on"  },
-    { "+above",         ".above",           XrmoptionNoArg,     (XPointer) "off" },
-    { "-background",    ".background",      XrmoptionSepArg,    (XPointer) NULL  },
-    { "-bg",            ".background",      XrmoptionSepArg,    (XPointer) NULL  },
-    { "-below",         ".below",           XrmoptionNoArg,     (XPointer) "on"  },
-    { "+below",         ".below",           XrmoptionNoArg,     (XPointer) "off" },
-    { "-borderless",    ".borderless",      XrmoptionNoArg,     (XPointer) "on"  },
-    { "+borderless",    ".borderless",      XrmoptionNoArg,     (XPointer) "off" },
-    { "-display",       ".display",         XrmoptionSepArg,    (XPointer) NULL  },
-    { "-debug",         ".debug",           XrmoptionNoArg,     (XPointer) "on"  },
-    { "+debug",         ".debug",           XrmoptionNoArg,     (XPointer) "off"  },
-    { "-flush-stdout",  ".flush-stdout",    XrmoptionNoArg,     (XPointer) "on"  },
-    { "+flush-stdout",  ".flush-stdout",    XrmoptionNoArg,     (XPointer) "off" },
-    { "-geometry",      ".geometry",        XrmoptionSepArg,    (XPointer) NULL  },
-    { "-g",             ".geometry",        XrmoptionSepArg,    (XPointer) NULL  },
-    { "-nl",            ".newline",         XrmoptionNoArg,     (XPointer) "on"  },
-    { "+nl",            ".newline",         XrmoptionNoArg,     (XPointer) "off" },
-    { "-run",           ".run",             XrmoptionSepArg,    (XPointer) NULL  },
-    { "-r",             ".run",             XrmoptionSepArg,    (XPointer) NULL  },
-    { "-stdout",        ".stdout",          XrmoptionNoArg,     (XPointer) "on"  },
-    { "+stdout",        ".stdout",          XrmoptionNoArg,     (XPointer) "off" },
-    { "-s",             ".stdout",          XrmoptionNoArg,     (XPointer) "on"  },
-    { "+s",             ".stdout",          XrmoptionNoArg,     (XPointer) "off" },
-    { "-sticky",        ".sticky",          XrmoptionNoArg,     (XPointer) "on"  },
-    { "+sticky",        ".sticky",          XrmoptionNoArg,     (XPointer) "off" },
-    { "-title",         ".title",           XrmoptionSepArg,    (XPointer) NULL  },
-    { "-help",          NULL,               XrmoptionSkipArg,   (XPointer) NULL  },
-    { "-version",       NULL,               XrmoptionSkipArg,   (XPointer) NULL  },
-    { "-?",             NULL,               XrmoptionSkipArg,   (XPointer) NULL  },
+    { "-action.clipboard",  ".action.clipboard",    XrmoptionSepArg,    (XPointer) NULL  },
+    { "-action.exit",       ".action.exit",         XrmoptionSepArg,    (XPointer) NULL  },
+    { "-action.primary",    ".action.primary",      XrmoptionSepArg,    (XPointer) NULL  },
+    { "-above",             ".above",               XrmoptionNoArg,     (XPointer) "on"  },
+    { "+above",             ".above",               XrmoptionNoArg,     (XPointer) "off" },
+    { "-background",        ".background",          XrmoptionSepArg,    (XPointer) NULL  },
+    { "-bg",                ".background",          XrmoptionSepArg,    (XPointer) NULL  },
+    { "-below",             ".below",               XrmoptionNoArg,     (XPointer) "on"  },
+    { "+below",             ".below",               XrmoptionNoArg,     (XPointer) "off" },
+    { "-borderless",        ".borderless",          XrmoptionNoArg,     (XPointer) "on"  },
+    { "+borderless",        ".borderless",          XrmoptionNoArg,     (XPointer) "off" },
+    { "-display",           ".display",             XrmoptionSepArg,    (XPointer) NULL  },
+    { "-debug",             ".debug",               XrmoptionNoArg,     (XPointer) "on"  },
+    { "+debug",             ".debug",               XrmoptionNoArg,     (XPointer) "off" },
+    { "-flush-stdout",      ".flush-stdout",        XrmoptionNoArg,     (XPointer) "on"  },
+    { "+flush-stdout",      ".flush-stdout",        XrmoptionNoArg,     (XPointer) "off" },
+    { "-geometry",          ".geometry",            XrmoptionSepArg,    (XPointer) NULL  },
+    { "-g",                 ".geometry",            XrmoptionSepArg,    (XPointer) NULL  },
+    { "-nl",                ".newline",             XrmoptionNoArg,     (XPointer) "on"  },
+    { "+nl",                ".newline",             XrmoptionNoArg,     (XPointer) "off" },
+    { "-run",               ".run",                 XrmoptionSepArg,    (XPointer) NULL  },
+    { "-r",                 ".run",                 XrmoptionSepArg,    (XPointer) NULL  },
+    { "-stdout",            ".stdout",              XrmoptionNoArg,     (XPointer) "on"  },
+    { "+stdout",            ".stdout",              XrmoptionNoArg,     (XPointer) "off" },
+    { "-s",                 ".stdout",              XrmoptionNoArg,     (XPointer) "on"  },
+    { "+s",                 ".stdout",              XrmoptionNoArg,     (XPointer) "off" },
+    { "-sticky",            ".sticky",              XrmoptionNoArg,     (XPointer) "on"  },
+    { "+sticky",            ".sticky",              XrmoptionNoArg,     (XPointer) "off" },
+    { "-title",             ".title",               XrmoptionSepArg,    (XPointer) NULL  },
+    { "-help",              NULL,                   XrmoptionSkipArg,   (XPointer) NULL  },
+    { "-version",           NULL,                   XrmoptionSkipArg,   (XPointer) NULL  },
+    { "-?",                 NULL,                   XrmoptionSkipArg,   (XPointer) NULL  },
 };
 
 XrmDatabase default_opts = NULL;
 XrmDatabase opts = NULL;
 
 char *option_defaults[] = {
-    NULL, "-g", "100x100", "-bg", "black", "-title", "xclippipe", "-stdout", "-flush-stdout", "-nl"
+    NULL, "-g", "100x100", "-bg", "black", "-title", "xclippipe", 
+    "-stdout", "-flush-stdout", "-nl", 
+    "-action.exit", "escape", 
+    "-action.primary", "button2", 
+    "-action.clipboard", "ctrl+v"
 };
 
 void debug (const char *fmt, ...) {
     va_list ap;
+
+    if (!opt.debug) return;
 
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -140,22 +177,22 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
     sigemptyset(&sigact_chld.sa_mask);
     sigaction (SIGCHLD, &sigact_chld, NULL);
 
-    if (NULL == (fh = popen(opt_run, "w"))) {
-        fprintf(stderr, "Failed to run command '%s': ", opt_run);
+    if (NULL == (fh = popen(opt.run, "w"))) {
+        fprintf(stderr, "Failed to run command '%s': ", opt.run);
         perror(NULL);
         return;
     }
     
-    fprintf(fh,"%*s%s", len,(char *)xcb_get_property_value(prop), opt_nl);
+    fprintf(fh,"%*s%s", len,(char *)xcb_get_property_value(prop), opt.nl);
 
     if (-1 == (rc = pclose(fh))) {
-        fprintf(stderr, "Command '%s' failed upon pclose(): ", opt_run);
+        fprintf(stderr, "Command '%s' failed upon pclose(): ", opt.run);
         perror(NULL);
         return;
     }
 
     if (rc) {
-        fprintf(stderr, "Command '%s' terminated with error code: %d", opt_run, WEXITSTATUS(rc));
+        fprintf(stderr, "Command '%s' terminated with error code: %d", opt.run, WEXITSTATUS(rc));
         
         if (WIFSIGNALED(rc))
             fprintf(stderr, " (signaled with %d)", WTERMSIG(rc));
@@ -170,7 +207,7 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
 void run_command (xcb_get_property_reply_t *prop) {
     pid_t child;
 
-    if (! (opt_run && strlen(opt_run))) return;
+    if (! (opt.run && strlen(opt.run))) return;
     if (!prop)                          return;
 
     int len   = xcb_get_property_value_length(prop);
@@ -178,7 +215,7 @@ void run_command (xcb_get_property_reply_t *prop) {
 
     switch(child = fork()) {
         case -1:
-            fprintf(stderr, "Failed to fork() to run command '%s': %s\n", opt_run, strerror(errno));
+            fprintf(stderr, "Failed to fork() to run command '%s': %s\n", opt.run, strerror(errno));
             break;
 
         case 0:
@@ -209,8 +246,7 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     }
 
     
-    debug("Got property reply\n");
-    debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
+    //debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
            prop->type, prop->format, prop->sequence, prop->length, prop->type, prop->bytes_after, prop->value_len);
 
     if (prop->value_len < 1) {
@@ -221,15 +257,15 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     
 
     if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
-        debug("Got String: %*s\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
-        if (opt_stdout) {
-            printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt_nl);
+        debug("got string: %*s\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
+        if (opt.o_stdout) {
+            printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
 
-            if (opt_flush_stdout) 
+            if (opt.flush_stdout) 
                 fflush(stdout);
         }
 
-        if (opt_run) {
+        if (opt.run) {
             run_command(prop);
         }
 
@@ -263,19 +299,6 @@ void request_selection (xcb_atom_t selection) {
     free(reply);
 }
 
-void ev_button_press (xcb_button_press_event_t *event) {
-    if (event->detail != 2 && event->detail != 3) return;
-    switch (event->detail) {
-        case 2:
-            request_selection(XCB_ATOM_PRIMARY);
-            break;
-
-        case 3:
-            request_selection(xcp_atom[CLIPBOARD]);
-            break;
-    }
-}
-
 void send_close_message () {
     xcb_client_message_event_t *event = calloc(32, 1);
     
@@ -291,23 +314,81 @@ void send_close_message () {
     free(event);
 }
 
+int check_action (xcp_action_elem_t *action_list, xcp_action_elem_t *needle) {
+    for (; action_list->valid; action_list++) {
+        if (   needle->ks_string
+            && action_list->ks_string
+            && ((!action_list->mod_mask) || (action_list->mod_mask & needle->mod_mask))
+            && 0 == strcasecmp(needle->ks_string, action_list->ks_string)) 
+        {
+            return 1;
+
+        } else if (needle->button && action_list->button == needle->button) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+xcp_action_t find_action (xcp_action_elem_t *needle) {
+    if (check_action(opt.act_clipboard, needle))
+        return XCP_ACTION_CLIPBOARD;
+
+    else if (check_action(opt.act_primary, needle))
+        return XCP_ACTION_PRIMARY;
+
+    else if (check_action(opt.act_exit, needle))
+        return XCP_ACTION_EXIT;
+
+    return XCP_ACTION_NONE;
+}
+
+void do_action (xcp_action_elem_t *act) {
+    switch (find_action(act)) {
+        case XCP_ACTION_CLIPBOARD:
+            request_selection(xcp_atom[CLIPBOARD]);
+            break;
+
+        case XCP_ACTION_PRIMARY:
+            request_selection(XCB_ATOM_PRIMARY);
+            break;
+
+        case XCP_ACTION_EXIT:
+            send_close_message();
+            break;
+
+        case XCP_ACTION_NONE:
+            break;
+    }
+}
+
+void ev_button_press (xcb_button_press_event_t *event) {
+    xcp_action_elem_t act = { NULL, event->detail, 0, 0 };
+
+    debug("button%d\n",event->detail);
+    do_action(&act);
+}
+
 void ev_key_press (xcb_key_press_event_t *event) {
     KeySym ks = XkbKeycodeToKeysym(dpy, event->detail, 0, 0);
 
     char *ch = XKeysymToString(ks);
 
-    if (strlen(ch) != 1) return;
-    if (! (event->state & XCB_KEY_BUT_MASK_CONTROL)) return;
+    if (IsModifierKey(ks)) return;
 
-    switch (*ch) {
-        case 'd':
-            send_close_message();
-            break;
+    if (event->state & XCB_KEY_BUT_MASK_SHIFT)    debug("shift+");
+    if (event->state & XCB_KEY_BUT_MASK_LOCK)     debug("caps+");
+    if (event->state & XCB_KEY_BUT_MASK_CONTROL)  debug("ctrl+");
+    if (event->state & XCB_KEY_BUT_MASK_MOD_1)    debug("mod1+");
+    if (event->state & XCB_KEY_BUT_MASK_MOD_2)    debug("mod2+");
+    if (event->state & XCB_KEY_BUT_MASK_MOD_3)    debug("mod3+");
+    if (event->state & XCB_KEY_BUT_MASK_MOD_4)    debug("mod4+");
+    if (event->state & XCB_KEY_BUT_MASK_MOD_5)    debug("mod5+");
+    debug("%s\n", ch);
 
-        case 'v':
-            request_selection(xcp_atom[CLIPBOARD]);
-            break;
-    }
+    xcp_action_elem_t act = { ch, 0, event->state, 0 };
+    do_action(&act);
 }
 
 xcb_atom_t intern_atom (const char *atom) {
@@ -458,7 +539,7 @@ void xclippipe () {
 
     xcb_generic_event_t *event;
     while (!done && (event = xcb_wait_for_event(c))) {
-        debug("Got Event\n");
+        //debug("Got Event\n");
         switch (event->response_type & ~0x80) {
 #if 0            
             case XCB_EXPOSE:
@@ -503,6 +584,104 @@ void load_resources (int *argc, char **argv) {
     XrmSetDatabase(dpy, opts);
 }
 
+void compile_action (xcp_action_elem_t **act, const char *resource) {
+    const char *val = get_resource(resource,NULL);
+    int  count;
+    char *buf = NULL;
+    char *p, *ps, *q, *qs, *next;
+
+    if (! (act && val)) return;
+    
+    buf = strdup(val);
+
+    for (count=1, p=buf; *p; p++)
+        if (*p == '|') count++; 
+
+    if (NULL == (*act = malloc(sizeof(xcp_action_elem_t) * (count+1)))) {
+        perror("Failed to malloc()");
+        exit(1);
+    }
+    memset(*act, '\0', sizeof(xcp_action_elem_t) * (count+1));
+
+    xcp_action_elem_t *a = *act;
+
+    q = strtok_r(buf, "|", &qs);
+    while (q) {
+        p = strtok_r(q, "+", &ps);
+        while (p) {
+            next = strtok_r(NULL, "+", &ps);
+
+            if (next) {
+                // p is a modifier key
+                if (0 == strcasecmp(p, "shift")) {
+                    a->mod_mask |= XCB_MOD_MASK_SHIFT;
+                } else if (0 == strcasecmp(p, "lock")) {
+                    a->mod_mask |= XCB_MOD_MASK_LOCK;
+                } else if (0 == strcasecmp(p, "ctrl")) {
+                    a->mod_mask |= XCB_MOD_MASK_CONTROL;
+                } else if (0 == strcasecmp(p, "mod1")) {
+                    a->mod_mask |= XCB_MOD_MASK_1;
+                } else if (0 == strcasecmp(p, "mod2")) {
+                    a->mod_mask |= XCB_MOD_MASK_2;
+                } else if (0 == strcasecmp(p, "mod3")) {
+                    a->mod_mask |= XCB_MOD_MASK_3;
+                } else if (0 == strcasecmp(p, "mod4")) {
+                    a->mod_mask |= XCB_MOD_MASK_4;
+                } else if (0 == strcasecmp(p, "mod5")) {
+                    a->mod_mask |= XCB_MOD_MASK_5;
+                } else {
+                    fprintf(stderr, "Unknown modifier: '%s' for %s\n", p, resource);
+                }
+
+            } else if (0 == strncasecmp(p, "button", 6)) {
+                // p is a mouse button
+                a->button = atoi(p+6);
+            } else {
+                // p is the key being modified
+                a->ks_string = strdup(p);
+            }
+
+            p=next;
+        }
+
+        q = strtok_r(NULL, "|", &qs);
+        a->valid = 1;
+        a++;
+    }
+
+    for (a=*act; a->valid; a++) {
+        if (a->ks_string)
+            debug("%s: key: %s  mod: 0x%04x\n", resource, a->ks_string, a->mod_mask);
+        else
+            debug("%s: button: %d\n", resource, a->button);
+    }
+
+    free(buf);
+}
+
+void compile_actions () {
+    compile_action(&opt.act_clipboard, "action.clipboard");
+    compile_action(&opt.act_primary,   "action.primary");
+    compile_action(&opt.act_exit,      "action.exit");
+}
+
+void free_action (xcp_action_elem_t **act) {
+    if (!act) return;
+
+    xcp_action_elem_t *a = *act;
+    for (; a->valid; a++)
+        free(a->ks_string);
+
+    *act = NULL;
+    free(*act);
+}
+
+void free_actions () {
+    free_action(&opt.act_clipboard);
+    free_action(&opt.act_primary);
+    free_action(&opt.act_exit);
+}
+
 int main (int argc, char **argv) {
     dpy = XOpenDisplay(NULL);
     struct sigaction sigact_chld;
@@ -522,12 +701,14 @@ int main (int argc, char **argv) {
 
     // Get resources from server and command line and get default options
     load_resources(&argc, argv);
-    opt_nl           = resource_true("newline") ? "\n" : "";
-    opt_stdout       = resource_true("stdout");
-    opt_flush_stdout = resource_true("flush-stdout");
-    opt_run          = get_resource("run",NULL);
+    opt.nl           = resource_true("newline") ? "\n" : "";
+    opt.debug        = resource_true("debug");
+    opt.o_stdout     = resource_true("stdout");
+    opt.flush_stdout = resource_true("flush-stdout");
+    opt.run          = get_resource("run",NULL);
+    compile_actions();
 
-    if (!opt_stdout) 
+    if (!opt.o_stdout) 
         fclose(stdout);
 
     memset(&sigact_chld, '\0', sizeof(struct sigaction));
@@ -538,6 +719,7 @@ int main (int argc, char **argv) {
 
     xclippipe();
 
+    free_actions();
     xcb_disconnect(c);
     return 0;
 }
