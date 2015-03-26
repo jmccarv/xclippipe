@@ -16,10 +16,12 @@ typedef enum xcp_atom_idx_t {
 extern xcb_atom_t xcp_atom[];
 
 
-extern Display          *dpy;
-extern xcb_connection_t *c;
-extern xcb_screen_t     *screen;
-extern xcb_window_t     window;
-extern xcp_options_t    opt;
+extern Display              *dpy;
+extern xcb_connection_t     *c;
+extern xcb_screen_t         *screen;
+extern xcb_window_t         window;
+extern xcp_options_t        opt;
+extern char                 *program_name;
+extern option_defaults_t    option_defaults;
 
 #endif

@@ -5,6 +5,7 @@
 #include <xcp_actions.h>
 #include <xcp_global.h>
 #include <xcp_xclippipe.h>
+#include <xcp_util.h>
 
 typedef enum xcp_action_t {
     XCP_ACTION_NONE = 0,
@@ -46,14 +47,17 @@ xcp_action_t find_action (xcp_action_elem_t *needle) {
 void do_action (xcp_action_elem_t *act) {
     switch (find_action(act)) {
         case XCP_ACTION_CLIPBOARD:
+            debug("Pasting from CLIPBOARD\n");
             request_selection(xcp_atom[CLIPBOARD]);
             break;
 
         case XCP_ACTION_PRIMARY:
+            debug("Pasting from PRIMARY\n");
             request_selection(XCB_ATOM_PRIMARY);
             break;
 
         case XCP_ACTION_EXIT:
+            debug("Exiting\n");
             send_close_message();
             break;
 
@@ -75,11 +79,7 @@ void compile_action (xcp_action_elem_t **act, const char *resource) {
     for (count=1, p=buf; *p; p++)
         if (*p == '|') count++; 
 
-    if (NULL == (*act = malloc(sizeof(xcp_action_elem_t) * (count+1)))) {
-        perror("Failed to malloc()");
-        exit(1);
-    }
-    memset(*act, '\0', sizeof(xcp_action_elem_t) * (count+1));
+    *act = xzmalloc(sizeof(xcp_action_elem_t) * (count+1));
 
     xcp_action_elem_t *a = *act;
 

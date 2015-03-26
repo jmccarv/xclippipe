@@ -1,8 +1,8 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <libgen.h>
 #include <stdio.h>
-#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -12,16 +12,7 @@
 
 #include <xcp_global.h>
 #include <xcp_init.h>
-
-void debug (const char *fmt, ...) {
-    va_list ap;
-
-    if (!opt.debug) return;
-
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-}
+#include <xcp_util.h>
 
 void do_child_command(xcb_get_property_reply_t *prop, int len) {
     FILE *fh;
@@ -115,7 +106,7 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     
 
     if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
-        debug("got string: %*s\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
+        debug("Pasting string: '%*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
         if (opt.o_stdout) {
             printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
 
@@ -239,6 +230,9 @@ int xclippipe () {
 }
 
 int main (int argc, char **argv) {
+    char *argv0 = strdup(argv[0]);
+    program_name = basename(argv0);
+
     xcp_init(&argc, argv);
 
     if (!opt.o_stdout) 
@@ -254,6 +248,7 @@ int main (int argc, char **argv) {
     int ret = xclippipe();
 
     xcp_deinit();
+    free(argv0);
 
     return ret;
 }

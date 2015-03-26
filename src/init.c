@@ -9,6 +9,7 @@
 #include <xcp_motif_window_hints.h>
 #include <xcp_global.h>
 #include <xcp_xclippipe.h>
+#include <xcp_options.h>
 
 xcb_screen_t *get_screen (int screen_num) {
     int i;
@@ -145,8 +146,15 @@ void xcp_init (int *argc, char **argv) {
 
     // Get resources from server and command line and get default options
     load_resources(argc, argv);
+
+    if (get_resource("_help", NULL))
+        usage();
+
+    if (get_resource("_fullhelp", NULL))
+        full_help();
+
     opt.nl           = resource_true("newline") ? "\n" : "";
-    opt.debug        = resource_true("debug");
+    opt.debug        = resource_true("_debug");
     opt.o_stdout     = resource_true("stdout");
     opt.flush_stdout = resource_true("flush-stdout");
     opt.run          = get_resource("run",NULL);
@@ -203,5 +211,6 @@ void xcp_init (int *argc, char **argv) {
 void xcp_deinit () {
     XFreeColors(dpy, DefaultColormap(dpy, DefaultScreen(dpy)), &(win_bg.pixel), 1, 0);
     free_actions();
+    free_resources();
     xcb_disconnect(c);
 }
