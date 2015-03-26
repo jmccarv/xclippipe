@@ -1,3 +1,6 @@
+#ifndef __XCP_MOTIF_WINDOW_HINTS_H__
+#define __XCP_MOTIF_WINDOW_HINTS_H__
+
 #include <X11/Xmd.h>
 
 typedef struct mwm_hints_t {
@@ -35,3 +38,5 @@ typedef struct mwm_hints_t {
 #define MWM_INPUT_SYSTEM_MODAL              2
 #define MWM_INPUT_FULL_APPLICATION_MODAL    3
 #define PROP_MWM_HINTS_ELEMENTS             5
+
+#endif
