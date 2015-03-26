@@ -13,12 +13,13 @@ typedef enum xcp_atom_idx_t {
     _MOTIF_WM_HINTS = 4
 } xcp_atom_idx_t;
 
+extern xcb_atom_t xcp_atom[5];
+
+
 extern Display          *dpy;
 extern xcb_connection_t *c;
 extern xcb_screen_t     *screen;
 extern xcb_window_t     window;
-
-extern xcb_atom_t xcp_atom[4];
-extern xcp_options_t opt;
+extern xcp_options_t    opt;
 
 #endif
