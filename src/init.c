@@ -1,20 +1,9 @@
-#include <errno.h>
-#include <signal.h>
-#include <sys/wait.h>
 #include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
 #include <string.h>
-#include <strings.h>
-#include <unistd.h>
 #include <xcb/xcb.h>
 #include <xcb/xcb_ewmh.h>
-#include <inttypes.h>
 #include <X11/Xlib.h>
 #include <X11/Xlib-xcb.h>
-#include <X11/XKBlib.h>
-#include <X11/Xatom.h>
-#include <X11/Xresource.h>
 #include <X11/Xutil.h>
 
 #include <xcp_motif_window_hints.h>
