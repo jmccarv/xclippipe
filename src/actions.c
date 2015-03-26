@@ -102,7 +102,7 @@ void compile_action (xcp_action_elem_t **act, const char *resource) {
     while (q) {
         p = strtok_r(q, "+", &ps);
         while (p) {
-            next = strtok_r(NULL, "+", &ps);
+            next = strtok_r(NULL, "+-", &ps);
 
             if (next) {
                 // p is a modifier key

@@ -13,7 +13,7 @@ typedef enum xcp_atom_idx_t {
     _MOTIF_WM_HINTS = 4
 } xcp_atom_idx_t;
 
-extern xcb_atom_t xcp_atom[5];
+extern xcb_atom_t xcp_atom[];
 
 
 extern Display          *dpy;
