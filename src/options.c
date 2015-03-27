@@ -202,7 +202,7 @@ void full_help () {
         "to tell it what action to take.  There are three possible actions:\n"
         "  action.exit - exit the program\n"
         "  action.clipboard - paste from the X CLIPBOARD selection (usually ctrl-v)\n"
-        "  action.primary - psate from the X PRIMARY selection (usually middle mouse button)\n\n"
+        "  action.primary - paste from the X PRIMARY selection (usually middle mouse button)\n\n"
         "You can configure what keys and buttons are bound to these actions on the\n"
         "command line or in your .Xresources.\n\n"
         "Key and button names are case insensitive\n\n"
@@ -230,10 +230,14 @@ void full_help () {
         , p, p, p, p, p
     );
 
-    printf("Default Command Line Parameters:\n ");
+    printf("Default Parameters:\n ");
     for (i=1; i < option_defaults.argc; i++)
         printf(" %s",option_defaults.argv[i]);
-    printf("\n");
+    printf("\n\n");
+    printf("The defaults are used when no other resource of the same name\n"
+           "is found either from the command line or from the\n"
+           "X server (.Xresources, etc)\n"
+          );
 
     exit(0);
 }
