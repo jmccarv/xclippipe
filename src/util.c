@@ -10,6 +10,7 @@ void debug (const char *fmt, ...) {
 
     if (!opt.debug) return;
 
+    fprintf(stderr, "%s: ", program_name);
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);

@@ -60,7 +60,6 @@ int xclippipe () {
 
     xcb_generic_event_t *event;
     while (!done && (event = xcb_wait_for_event(c))) {
-        //debug("Got Event\n");
         switch (event->response_type & ~0x80) {
 #if 0            
             case XCB_EXPOSE:

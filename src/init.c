@@ -88,20 +88,20 @@ void set_window_state () {
     xcb_ewmh_init_atoms_replies(&ewmh, iac, NULL);
 
     if (resource_true("sticky")) {
-        debug("Setting _NET_WM_STATE_STICKY\n");
+        debug("setting _NET_WM_STATE_STICKY\n");
         state[nr_state++] = ewmh._NET_WM_STATE_STICKY;
 
-        debug("Setting _NET_WM_DESKTOP to all desktops\n");
+        debug("setting _NET_WM_DESKTOP to all desktops\n");
         xcb_ewmh_set_wm_desktop(&ewmh, window, 0xffffffff);
     }
 
 
     if (resource_true("above")) {
-        debug("Setting _NET_WM_STATE_ABOVE\n");
+        debug("setting _NET_WM_STATE_ABOVE\n");
         state[nr_state++] = ewmh._NET_WM_STATE_ABOVE;
 
     } else if (resource_true("below")) {
-        debug("Setting _NET_WM_STATE_BELOW\n");
+        debug("setting _NET_WM_STATE_BELOW\n");
         state[nr_state++] = ewmh._NET_WM_STATE_BELOW;
     }
 

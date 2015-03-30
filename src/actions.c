@@ -29,6 +29,8 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
     sigemptyset(&sigact_chld.sa_mask);
     sigaction (SIGCHLD, &sigact_chld, NULL);
 
+    debug("running command: '%s'\n", opt.run);
+
     if (NULL == (fh = popen(opt.run, "w"))) {
         fprintf(stderr, "Failed to run command '%s': ", opt.run);
         perror(NULL);
@@ -42,6 +44,8 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
         perror(NULL);
         return;
     }
+
+    debug("command exited with status: %d\n", WEXITSTATUS(rc));
 
     if (rc) {
         fprintf(stderr, "Command '%s' terminated with error code: %d", opt.run, WEXITSTATUS(rc));
@@ -110,7 +114,7 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     
 
     if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
-        debug("Pasting string: '%*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
+        debug("pasting string: '%*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
         if (opt.o_stdout) {
             printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
 
@@ -185,17 +189,17 @@ xcp_action_t find_action (xcp_action_elem_t *needle) {
 void do_action (xcp_action_elem_t *act) {
     switch (find_action(act)) {
         case XCP_ACTION_CLIPBOARD:
-            debug("Pasting from CLIPBOARD\n");
+            debug("pasting from CLIPBOARD\n");
             request_selection(xcp_atom[CLIPBOARD]);
             break;
 
         case XCP_ACTION_PRIMARY:
-            debug("Pasting from PRIMARY\n");
+            debug("pasting from PRIMARY\n");
             request_selection(XCB_ATOM_PRIMARY);
             break;
 
         case XCP_ACTION_EXIT:
-            debug("Exiting\n");
+            debug("exiting\n");
             send_close_message();
             break;
 
