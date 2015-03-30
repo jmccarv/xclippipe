@@ -8,6 +8,8 @@
 #include <xcp_options.h>
 #include <xcp_util.h>
 
+void usage (int status);
+
 static XrmOptionDescRec opTable[] = {
     { "-action.clipboard",  ".action.clipboard",    XrmoptionSepArg,    (XPointer) NULL  },
     { "-action.exit",       ".action.exit",         XrmoptionSepArg,    (XPointer) NULL  },
@@ -67,6 +69,7 @@ static xcp_help_t xcp_help[] = {
     { "-/+debug",               "",                 "turn on/off debugging output to stderr" },
     { "-/+flush-stdout",        "flush-stdout",     "turn on/off calling fflush on stdout after each paste" },
     { "-g/-geometry geom",      "geometry",         "size and position of window" },
+    { "-name programname"       "",                 "name of program - used when looking up X resources" },
     { "-/+nl",                  "newline",          "turn on off appending a newline when pasting" },
     { "-/+newline",             "newline",          "turn on off appending a newline when pasting" },
     { "-r/-run command",        "run",              "run this program on each paste action, passing the selection contents on stdin.  Set to empty string '' to disable running any commands" },
@@ -92,9 +95,11 @@ static char *_option_defaults[] = {
     "-action.clipboard", "ctrl+v"
 };
 
-const char *get_resource (const char *name, const char *class) {
+const char *_get_resource (const char *name, const char *class, int want_default) {
     if (!name)  return NULL;
     if (!class) class = name;
+
+    XrmDatabase o = want_default ? default_opts : opts;
 
     char *res_name_buf  = xzmalloc(strlen(program_name)+strlen(name)+2);
     char *res_class_buf = xzmalloc(9+strlen(class)+2);
@@ -105,15 +110,28 @@ const char *get_resource (const char *name, const char *class) {
     char *rec_type;
     XrmValue rec_val;
 
-    XrmGetResource(opts, res_name_buf, res_class_buf, &rec_type, &rec_val);
-
-    if (!rec_val.addr)
-        XrmGetResource(default_opts, res_name_buf, res_class_buf, &rec_type, &rec_val);
+    XrmGetResource(o, res_name_buf, res_class_buf, &rec_type, &rec_val);
 
     free(res_name_buf);
     free(res_class_buf);
     
+    if (rec_val.addr && rec_val.addr[rec_val.size-1] != '\0') {
+        fprintf(stderr, "resource %s does not appear to be a string!\n", name);
+        return NULL;
+    }
+
     return(rec_val.addr);
+}
+
+const char *get_default_resource (const char *name) {
+    return _get_resource(name, NULL, 1);
+}
+
+const char *get_resource (const char *name, const char *class) {
+    const char *ret = _get_resource(name, class, 0);
+    if (! ret) ret = _get_resource(name, class, 1);
+
+    return ret;
 }
 
 int resource_true (const char *name) {
@@ -125,11 +143,14 @@ int resource_true (const char *name) {
     return 0;
 }
 
+char *opt_abovebelow = NULL;
+
 void load_resources (int *argc, char **argv) {
     int i;
     char *s;
     int def_argc;
     char **def_argv;
+    XrmDatabase X_opts = NULL;
 
     def_argc = option_defaults.argc = sizeof(_option_defaults) / sizeof(char *);
     option_defaults.argv = xzmalloc(sizeof(char *) * def_argc);
@@ -144,18 +165,56 @@ void load_resources (int *argc, char **argv) {
         def_argv[i] = option_defaults.argv[i] = s;
     }
 
+    /* Get defaults to use if no other resources set */
     XrmParseCommand(&default_opts, opTable, sizeof(opTable)/sizeof(XrmOptionDescRec), program_name, &def_argc, def_argv);
     free(def_argv);
 
-    opts = XrmGetStringDatabase(XResourceManagerString(dpy));
+    /* Get command line resources and prepare to merge them with the 
+     * X server's resources 
+     */
+    X_opts = XrmGetStringDatabase(XResourceManagerString(dpy));
     XrmParseCommand(&opts, opTable, sizeof(opTable)/sizeof(XrmOptionDescRec), program_name, argc, argv);
 
+    if (resource_true("above") && resource_true("below")) {
+        fprintf(stderr, "-above and -below are mutually exclusive!\n");
+        usage(1);
+    }
+
+    /* if one is set, disable the other so the command line 
+     *overrides any X server or default resources 
+     */
+    if (resource_true("above")) {
+        opt_abovebelow = xzmalloc(strlen(program_name)+strlen(".below")+1);
+        sprintf(opt_abovebelow, "%s.%s", program_name, "below");
+        XrmPutStringResource(&opts, opt_abovebelow, "off");
+
+    } else if (resource_true("below")) {
+        opt_abovebelow = xzmalloc(strlen(program_name)+strlen(".above")+1);
+        sprintf(opt_abovebelow, "%s.%s", program_name, "above");
+        XrmPutStringResource(&opts, opt_abovebelow, "off");
+    }
+
+    XrmCombineDatabase(X_opts, &opts, False);
+
     XrmSetDatabase(dpy, opts);
+
+    /* A small cache of frequently accessed resources so we
+     * don't have to talk with the X server.
+     *
+     * Be aware these may be used throughout the program.
+     */
+    opt.nl           = resource_true("newline") ? "\n" : "";
+    opt.debug        = resource_true("_debug");
+    opt.o_stdout     = resource_true("stdout");
+    opt.flush_stdout = resource_true("flush-stdout");
+    opt.run          = get_resource("run",NULL);
 }
 
 void free_resources () {
     int i;
     
+    if (opt_abovebelow) free (opt_abovebelow);
+
     for (i=1; i < option_defaults.argc; i++) {
         if (option_defaults.argv[i]) free(option_defaults.argv[i]);
     }
@@ -185,9 +244,9 @@ void short_help (int include_resource_name) {
     }
 }
 
-void usage () {
+void usage (int status) {
     short_help(0);
-    exit(0);
+    exit(status);
 }
 
 void full_help () {
@@ -206,6 +265,9 @@ void full_help () {
         "You can configure what keys and buttons are bound to these actions on the\n"
         "command line or in your .Xresources.\n\n"
         "Key and button names are case insensitive\n\n"
+        "-name sets the program name that is used to look up X resources.\n"
+        "If no -name is present on the command line, the name of this executable\n"
+        "will be used.\n\n"
         "\nEXAMPLES\n"
         , p, p
     );
@@ -239,5 +301,10 @@ void full_help () {
            "X server (.Xresources, etc)\n"
           );
 
+    exit(0);
+}
+
+void version () {
+    printf("%s version %d.%d\n", program_name, VERSION_MAJOR, VERSION_MINOR);
     exit(0);
 }

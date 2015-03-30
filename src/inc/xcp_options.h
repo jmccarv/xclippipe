@@ -26,11 +26,13 @@ typedef struct option_defaults_t {
 } option_defaults_t;
 
 
-void       load_resources (int *argc, char **argv);
-void       free_resources ();
-const char *get_resource  (const char *name, const char *class);
-int        resource_true  (const char *name);
-void       usage          ();
-void       full_help      ();
+void       load_resources           (int *argc, char **argv);
+void       free_resources           ();
+const char *get_resource            (const char *name, const char *class);
+const char *get_default_resource    (const char *name);
+int        resource_true            (const char *name);
+void       usage                    (int status);
+void       full_help                ();
+void       version                  ();
 
 #endif

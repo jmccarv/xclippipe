@@ -1,11 +1,8 @@
-#include <errno.h>
 #include <signal.h>
-#include <sys/wait.h>
 #include <libgen.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <xcb/xcb.h>
 #include <X11/XKBlib.h>
 #include <X11/Xutil.h>
@@ -14,139 +11,6 @@
 #include <xcp_init.h>
 #include <xcp_util.h>
 
-void do_child_command(xcb_get_property_reply_t *prop, int len) {
-    FILE *fh;
-    int  rc;
-
-    struct sigaction sigact_chld;
-
-    memset(&sigact_chld, '\0', sizeof(struct sigaction));
-    sigact_chld.sa_handler = SIG_DFL;
-    sigemptyset(&sigact_chld.sa_mask);
-    sigaction (SIGCHLD, &sigact_chld, NULL);
-
-    if (NULL == (fh = popen(opt.run, "w"))) {
-        fprintf(stderr, "Failed to run command '%s': ", opt.run);
-        perror(NULL);
-        return;
-    }
-    
-    fprintf(fh,"%*s%s", len,(char *)xcb_get_property_value(prop), opt.nl);
-
-    if (-1 == (rc = pclose(fh))) {
-        fprintf(stderr, "Command '%s' failed upon pclose(): ", opt.run);
-        perror(NULL);
-        return;
-    }
-
-    if (rc) {
-        fprintf(stderr, "Command '%s' terminated with error code: %d", opt.run, WEXITSTATUS(rc));
-        
-        if (WIFSIGNALED(rc))
-            fprintf(stderr, " (signaled with %d)", WTERMSIG(rc));
-
-        if (WCOREDUMP(rc))
-            fprintf(stderr, " (core dumped)");
-
-        fprintf(stderr,"\n");
-    }
-}
-
-void run_command (xcb_get_property_reply_t *prop) {
-    pid_t child;
-
-    if (! (opt.run && strlen(opt.run))) return;
-    if (!prop)                          return;
-
-    int len   = xcb_get_property_value_length(prop);
-    if (len < 1) return;
-
-    switch(child = fork()) {
-        case -1:
-            fprintf(stderr, "Failed to fork() to run command '%s': %s\n", opt.run, strerror(errno));
-            break;
-
-        case 0:
-            break;
-
-        default:
-            debug("forked() child: %d\n", child);
-            return;
-    }
-
-    fclose(stdin);
-    fclose(stdout);
-    do_child_command(prop, len);
-
-    exit(0);
-}
-
-void ev_selection_notify (xcb_selection_notify_event_t *event) {
-    xcb_get_property_cookie_t prop_cookie;
-    xcb_get_property_reply_t  *prop;
-
-    prop_cookie = xcb_get_property(c, False, window, event->property, XCB_ATOM_STRING, 0, UINT32_MAX);
-    prop        = xcb_get_property_reply(c, prop_cookie, NULL);
-    
-    if (!prop) {
-        fprintf(stderr, "No propery reply\n");
-        return;
-    }
-
-    /*
-    debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
-           prop->type, prop->format, prop->sequence, prop->length, prop->type, prop->bytes_after, prop->value_len);
-    */
-
-    if (prop->value_len < 1) {
-        fprintf(stderr, "Property reply was zero length\n");
-        free(prop);
-        return;
-    }
-    
-
-    if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
-        debug("Pasting string: '%*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
-        if (opt.o_stdout) {
-            printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
-
-            if (opt.flush_stdout) 
-                fflush(stdout);
-        }
-
-        if (opt.run) {
-            run_command(prop);
-        }
-
-    } else {
-        fprintf(stderr, "Got something that's not a string; ignoring\n");
-    }
-
-    if (prop->bytes_after) {
-        fprintf(stderr, "Did not receive all the data from the clipboard, output truncated\n");
-    }
-
-    free(prop);
-
-    xcb_delete_property(c, window, event->property);
-}
-
-void request_selection (xcb_atom_t selection) {
-    xcb_get_selection_owner_cookie_t cookie;
-    xcb_get_selection_owner_reply_t *reply;
-
-    cookie = xcb_get_selection_owner(c, selection);
-    reply  = xcb_get_selection_owner_reply(c, cookie, NULL);
-
-    if (reply->owner == None) {
-        fprintf(stderr, "No selection owner\n");
-        return;
-    }
-
-    xcb_convert_selection(c, window, selection, XCB_ATOM_STRING, xcp_atom[_XCP_CLIP], CurrentTime);
-    xcb_flush(c);
-    free(reply);
-}
 
 void send_close_message () {
     xcb_client_message_event_t *event = calloc(32, 1);

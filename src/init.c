@@ -88,14 +88,20 @@ void set_window_state () {
     xcb_ewmh_init_atoms_replies(&ewmh, iac, NULL);
 
     if (resource_true("sticky")) {
+        debug("Setting _NET_WM_STATE_STICKY\n");
         state[nr_state++] = ewmh._NET_WM_STATE_STICKY;
+
+        debug("Setting _NET_WM_DESKTOP to all desktops\n");
+        xcb_ewmh_set_wm_desktop(&ewmh, window, 0xffffffff);
     }
 
 
     if (resource_true("above")) {
+        debug("Setting _NET_WM_STATE_ABOVE\n");
         state[nr_state++] = ewmh._NET_WM_STATE_ABOVE;
 
     } else if (resource_true("below")) {
+        debug("Setting _NET_WM_STATE_BELOW\n");
         state[nr_state++] = ewmh._NET_WM_STATE_BELOW;
     }
 
@@ -124,8 +130,15 @@ typedef struct geom_t {
 XColor win_bg;
 
 void xcp_init (int *argc, char **argv) {
-    XColor win_bg;
     geom_t g = { 0, 0, 0, 0 };
+    int i;
+
+    for (i=1; i < *argc; i++) {
+        if (0 == strcmp(argv[i], "-name") && i+1 < *argc) {
+            program_name = argv[i+1];
+            break;
+        }
+    }
 
     dpy = XOpenDisplay(NULL);
 
@@ -148,16 +161,16 @@ void xcp_init (int *argc, char **argv) {
     load_resources(argc, argv);
 
     if (get_resource("_help", NULL))
-        usage();
+        usage(0);
 
     if (get_resource("_fullhelp", NULL))
         full_help();
 
-    opt.nl           = resource_true("newline") ? "\n" : "";
-    opt.debug        = resource_true("_debug");
-    opt.o_stdout     = resource_true("stdout");
-    opt.flush_stdout = resource_true("flush-stdout");
-    opt.run          = get_resource("run",NULL);
+    if (get_resource("_version", NULL))
+        version();
+
+    debug("using program name: '%s'\n", program_name);
+
     compile_actions();
 
     intern_atoms();
@@ -179,7 +192,11 @@ void xcp_init (int *argc, char **argv) {
     //values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
     values[1] = XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_KEY_PRESS;
 
-    g.flags = XParseGeometry(get_resource("geometry","NULL"), &(g.x), &(g.y), &(g.width), &(g.height));
+    const char *geometry = get_resource("geometry",NULL);
+    if (! (geometry && strlen(geometry)))
+        geometry = get_default_resource("geometry");
+
+    g.flags = XParseGeometry(geometry, &(g.x), &(g.y), &(g.width), &(g.height));
 
     xcb_create_window(c, XCB_COPY_FROM_PARENT, window, screen->root,
                       g.x, g.y, g.width, g.height, 10,
@@ -187,7 +204,8 @@ void xcp_init (int *argc, char **argv) {
 
     /* set window title */
     const char *title = get_resource("title", NULL);
-    xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen(title), title);
+    if (title)
+        xcb_change_property(c, XCB_PROP_MODE_REPLACE, window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen(title), title);
 
     set_window_state();
     

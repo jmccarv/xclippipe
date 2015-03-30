@@ -13,5 +13,6 @@ typedef struct xcp_action_elem_t {
 void compile_actions ();
 void do_action (xcp_action_elem_t *action);
 void free_actions ();
+void ev_selection_notify (xcb_selection_notify_event_t *event);
 
 #endif
