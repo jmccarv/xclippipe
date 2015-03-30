@@ -1,0 +1,88 @@
+xclippipe - paste from X clipboard to stdout and/or a command
+usage: xclippipe [OPTIONS]
+
+OPTIONS:
+  Command Line Parameter X resource         Description
+  -action.clipboard      action.clipboard   specify key and button presses which activate pasting from CLIPBOARD
+  -action.exit           action.exit        specify key and button presses which exit the program
+  -action.primary        action.primary     specify key and button presses which activate pasting from PRIMARY
+  -/+above               above              turn on/off having window on top of other windows
+  -bg color              background         background color
+  -background color      background         background color
+  -/+below               below              turn on/off having window below other windows
+  -/+borderless          borderless         turn on/off window decorations
+  -display displayname   display            X server to contact
+  -/+debug                                  turn on/off debugging output to stderr
+  -/+flush-stdout        flush-stdout       turn on/off calling fflush on stdout after each paste
+  -g/-geometry geom      geometry           size and position of window
+  -name programname      name of program - used when looking up X resources (null)
+  -/+nl                  newline            turn on off appending a newline when pasting
+  -/+newline             newline            turn on off appending a newline when pasting
+  -r/-run command        run                run this program on each paste action, passing the selection contents on stdin.  Set to empty string '' to disable running any commands
+  +r/+run                run                do not run any commands.  Same as -run ''
+  -/+stdout              stdout             turn on/off pasting to stdout
+  -/+s                   sticky             turn on off sticky mode - window will appear on every desktop
+  -title title           title              set window title
+  -?/-h                                     this help
+  -help                                     full help including examples
+  -version                                  output version and exit
+
+xclippipe pastes the contents of an X selection (PRIMARY and/or CLIPBOARD)
+to its stdout and/or the stdin of another process
+
+xclippipe creates a window and waits for keyboard or mouse button presses
+to tell it what action to take.  There are three possible actions:
+  action.exit - exit the program
+  action.clipboard - paste from the X CLIPBOARD selection (usually ctrl-v)
+  action.primary - paste from the X PRIMARY selection (usually middle mouse button)
+
+You can configure what keys and buttons are bound to these actions on the
+command line or in your .Xresources.
+
+Key and button names are case insensitive
+
+-name sets the program name that is used to look up X resources.
+If no -name is present on the command line, the name of this executable
+will be used.
+
+
+EXAMPLES
+1.  Paste to stdout.
+    Paste from CLIPBOARD on ctrl-v
+    and from PRIMARY on mouse button 2 (middle mouse button)
+    Exit on Escape key
+
+    xclippipe -stdout -action.clipboard ctrl+v -action.primary button2 -action.exit escape
+
+2.  For each paste event, run a process (cat) sending the selection data to its stdin
+    Paste from PRIMARY on mouse button 2 or ctrl-alt-p
+    Paste from CLIPBOARD on mouse button 3 or ctrl-v
+    Exit on ctrl-d or Escape or mouse button 1
+
+    xclippipe -run 'cat >> $HOME/xclippipe.log' -action.clipboard 'ctrl+v|button3' -action.primary 'button2|ctrl+mod2+p' -action.exit 'escape|button1'
+
+3.  Paste to stdout and explicitely disable any 'run' commands that might be in your .Xresources
+    Disable appending a newline to output, set the background color to green,
+    turn off window manager decorations (borders), and run above other windows
+
+    xclippipe -stdout -run '' +nl -bg green -borderless -above
+
+4.  Use debugging to see what keys and buttons you're pressing to help know what to pass for actions
+
+    xclippipe +stdout +run -debug
+
+Notes:
+When configuring keys with modifiers, any modifiers you don't want to require,
+just leave them off.  xclippipe will ignore any non-specified modifiers.
+For example, if you set
+  -action.exit: ctrl+d
+xclippipe will exit when ctrl and 'd' are pressed at the same time
+regardless of what other modifiers are set
+(so it would also exit on ctrl+alt+d)
+
+Default Parameters:
+  -g 100x100 -bg black -title xclippipe -stdout -flush-stdout -nl -action.exit escape -action.primary button2 -action.clipboard ctrl+v
+
+The defaults are used when no other resource of the same name
+is found either from the command line or from the
+X server (.Xresources, etc)
