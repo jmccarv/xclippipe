@@ -292,6 +292,18 @@ void full_help () {
         , p, p, p, p, p
     );
 
+    printf("Notes:\n");
+    printf(
+        "When configuring keys with modifiers, any modifiers you don't want to require,\n"
+        "just leave them off.  %s will ignore any non-specified modifiers.\n"
+        "For example, if you set\n"
+        "  -action.exit: ctrl+d\n"
+        "%s will exit when ctrl and 'd' are pressed at the same time\n"
+        "regardless of what other modifiers are set\n"
+        "(so it would also exit on ctrl+alt+d)\n\n"
+        , p, p);
+            
+
     printf("Default Parameters:\n ");
     for (i=1; i < option_defaults.argc; i++)
         printf(" %s",option_defaults.argv[i]);
