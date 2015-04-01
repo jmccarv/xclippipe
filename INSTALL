@@ -7,3 +7,6 @@ cd build
 cmake ..
 make
 sudo make install
+
+or to install to a different prefix other than /usr/local:
+cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt ..
