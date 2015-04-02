@@ -72,7 +72,7 @@ void intern_atoms () {
     xcp_atom[_MOTIF_WM_HINTS]  = intern_atom("_MOTIF_WM_HINTS");
 }
 
-/* For whatever reason, ucb_aux_parse_color only seemed to work with '#rrggbb'
+/* For whatever reason, xcb_aux_parse_color only seemed to work with '#rrggbb'
  * syntax.  It doesn't work for plain names like 'blue' or the 'rgb:rr/gg/bb'
  * syntax.  I'm probably just missing something but for now I'm just going to
  * use XAllocNamedColor instead.
