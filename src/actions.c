@@ -123,7 +123,7 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     prop        = xcb_get_property_reply(c, prop_cookie, NULL);
     
     if (!prop) {
-        fprintf(stderr, "No propery reply\n");
+        fprintf(stderr, "No property reply\n");
         return;
     }
 
