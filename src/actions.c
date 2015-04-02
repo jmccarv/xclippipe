@@ -253,7 +253,7 @@ void compile_action (xcp_action_elem_t **act, const char *resource) {
 
     q = strtok_r(buf, "|", &qs);
     while (q) {
-        p = strtok_r(q, "+", &ps);
+        p = strtok_r(q, "+-", &ps);
         while (p) {
             next = strtok_r(NULL, "+-", &ps);
 
