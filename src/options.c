@@ -308,7 +308,7 @@ void full_help () {
         "    Paste from PRIMARY on mouse button 2 or ctrl-alt-p\n"
         "    Paste from CLIPBOARD on mouse button 3 or ctrl-v\n"
         "    Exit on ctrl-d or Escape or mouse button 1\n\n"
-        "    %s -run 'cat >> $HOME/%s.log' -action.clipboard 'ctrl+v|button3' -action.primary 'button2|ctrl+mod2+p' -action.exit 'escape|button1'\n\n"
+        "    %s -run 'cat >> $HOME/%s.log' -action.clipboard 'ctrl+v|button3' -action.primary 'button2|ctrl+mod2+p' -action.exit 'ctrl+d|escape|button1'\n\n"
         "3.  Paste to stdout and explicitely disable any 'run' commands that might be in your .Xresources\n"
         "    Disable appending a newline to output, set the background color to green,\n"
         "    turn off window manager decorations (borders), and run above other windows\n\n"
