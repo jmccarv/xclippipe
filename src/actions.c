@@ -281,7 +281,12 @@ void compile_action (xcp_action_elem_t **act, const char *resource) {
 
             } else if (0 == strncasecmp(p, "button", 6)) {
                 // p is a mouse button
-                a->button = atoi(p+6);
+                if (strlen(p) == 7) {
+                    a->button = atoi(p+6);
+                } else {
+                    fprintf(stderr, "Unknown button: '%s' for %s\n", p, resource);
+                }
+
             } else {
                 // p is the key being modified
                 a->ks_string = strdup(p);
