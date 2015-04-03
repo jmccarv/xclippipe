@@ -86,3 +86,8 @@ Default Parameters:
 The defaults are used when no other resource of the same name
 is found either from the command line or from the
 X server (.Xresources, etc)
+
+
+See also contrib/xclippipe_recv (installed in the same location as xclippipe)
+for an example script to use with xclippipe and an example configuration to
+use with it and xclippipe.
