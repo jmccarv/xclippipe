@@ -197,10 +197,7 @@ void xcp_init (int *argc, char **argv) {
 
     debug("using program name: '%s'\n", program_name);
 
-    compile_actions();
-
     intern_atoms();
-
 
     // allocate background color for window
     if (NULL == get_background_color(&win_bg)) {
@@ -208,6 +205,8 @@ void xcp_init (int *argc, char **argv) {
         xcb_disconnect(c);
         exit(1);
     }
+
+    compile_actions();
 
     // create window
     window = xcb_generate_id(c);
