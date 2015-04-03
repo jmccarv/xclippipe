@@ -29,11 +29,15 @@
 
 #include <xcb/xcb.h>
 
+typedef void (*xcp_action_callback_t)();
+
 typedef struct xcp_action_elem_t {
-    char            *ks_string;
-    int             button;
-    xcb_keycode_t   mod_mask;
-    int             valid;
+    char *ks_string;
+    int button;
+    xcb_keycode_t mod_mask;
+    int nr_mask_bits;
+    xcp_action_callback_t handler;
+    struct xcp_action_elem_t *next;
 } xcp_action_elem_t;
 
 void compile_actions ();

@@ -224,16 +224,7 @@ void load_resources (int *argc, char **argv) {
 
     XrmSetDatabase(dpy, opts);
 
-    /* A small cache of frequently accessed resources so we
-     * don't have to talk with the X server.
-     *
-     * Be aware these may be used throughout the program.
-     */
-    opt.nl           = resource_true("newline") ? "\n" : "";
-    opt.debug        = resource_true("_debug");
-    opt.o_stdout     = resource_true("stdout");
-    opt.flush_stdout = resource_true("flush-stdout");
-    opt.run          = get_resource("run",NULL);
+    opt.nl = resource_true("newline") ? "\n" : "";
 }
 
 void free_resources () {

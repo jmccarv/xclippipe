@@ -53,10 +53,27 @@ void send_close_message () {
     free(event);
 }
 
-void ev_button_press (xcb_button_press_event_t *event) {
-    xcp_action_elem_t act = { NULL, event->detail, 0, 0 };
+/* terrible, I know */
+char modifier_state[64];
+char *get_modifier_state(uint16_t state) {
+    modifier_state[0] = '\0';
 
-    debug("button%d\n",event->detail);
+    if (state & XCB_KEY_BUT_MASK_SHIFT)    strcat(modifier_state,"shift+");
+    if (state & XCB_KEY_BUT_MASK_LOCK)     strcat(modifier_state,"lock+");
+    if (state & XCB_KEY_BUT_MASK_CONTROL)  strcat(modifier_state,"ctrl+");
+    if (state & XCB_KEY_BUT_MASK_MOD_1)    strcat(modifier_state,"mod1+");
+    if (state & XCB_KEY_BUT_MASK_MOD_2)    strcat(modifier_state,"mod2+");
+    if (state & XCB_KEY_BUT_MASK_MOD_3)    strcat(modifier_state,"mod3+");
+    if (state & XCB_KEY_BUT_MASK_MOD_4)    strcat(modifier_state,"mod4+");
+    if (state & XCB_KEY_BUT_MASK_MOD_5)    strcat(modifier_state,"mod5+");
+    
+    return modifier_state;
+}
+
+void ev_button_press (xcb_button_press_event_t *event) {
+    xcp_action_elem_t act = { NULL, event->detail, event->state, 0 };
+
+    debug("%sbutton%d\n",get_modifier_state(event->state),event->detail);
     do_action(&act);
 }
 
@@ -67,15 +84,7 @@ void ev_key_press (xcb_key_press_event_t *event) {
 
     if (IsModifierKey(ks)) return;
 
-    if (event->state & XCB_KEY_BUT_MASK_SHIFT)    debug("shift+");
-    if (event->state & XCB_KEY_BUT_MASK_LOCK)     debug("lock+");
-    if (event->state & XCB_KEY_BUT_MASK_CONTROL)  debug("ctrl+");
-    if (event->state & XCB_KEY_BUT_MASK_MOD_1)    debug("mod1+");
-    if (event->state & XCB_KEY_BUT_MASK_MOD_2)    debug("mod2+");
-    if (event->state & XCB_KEY_BUT_MASK_MOD_3)    debug("mod3+");
-    if (event->state & XCB_KEY_BUT_MASK_MOD_4)    debug("mod4+");
-    if (event->state & XCB_KEY_BUT_MASK_MOD_5)    debug("mod5+");
-    debug("%s\n", ch);
+    debug("%s%s\n", get_modifier_state(event->state),ch);
 
     xcp_action_elem_t act = { ch, 0, event->state, 0 };
     do_action(&act);
@@ -124,7 +133,7 @@ int main (int argc, char **argv) {
 
     xcp_init(&argc, argv);
 
-    if (!opt.o_stdout) 
+    if (!resource_true("stdout"))
         fclose(stdout);
 
     struct sigaction sigact_chld;

@@ -37,28 +37,40 @@
 #include <xcp_xclippipe.h>
 #include <xcp_util.h>
 
-typedef enum xcp_action_t {
-    XCP_ACTION_NONE = 0,
-    XCP_ACTION_CLIPBOARD = 1,
-    XCP_ACTION_PRIMARY = 2,
-    XCP_ACTION_EXIT = 3
-} xcp_action_t;
+/* action callbacks */
+void act_clipboard () {
+    debug("pasting from CLIPBOARD\n");
+    request_selection(xcp_atom[CLIPBOARD]);
+}
+
+void act_primary () {
+    debug("pasting from PRIMARY\n");
+    request_selection(XCB_ATOM_PRIMARY);
+}
+
+void act_exit() {
+    debug("exiting\n");
+    send_close_message();
+}
+
+
 
 void do_child_command(xcb_get_property_reply_t *prop, int len) {
     FILE *fh;
     int  rc;
 
     struct sigaction sigact_chld;
+    const char *cmd = get_resource("run",NULL);
 
     memset(&sigact_chld, '\0', sizeof(struct sigaction));
     sigact_chld.sa_handler = SIG_DFL;
     sigemptyset(&sigact_chld.sa_mask);
     sigaction (SIGCHLD, &sigact_chld, NULL);
 
-    debug("running command: '%s'\n", opt.run);
+    debug("running command: '%s'\n", cmd);
 
-    if (NULL == (fh = popen(opt.run, "w"))) {
-        fprintf(stderr, "Failed to run command '%s': ", opt.run);
+    if (NULL == (fh = popen(cmd, "w"))) {
+        fprintf(stderr, "Failed to run command '%s': ", cmd);
         perror(NULL);
         return;
     }
@@ -66,7 +78,7 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
     fprintf(fh,"%*s%s", len,(char *)xcb_get_property_value(prop), opt.nl);
 
     if (-1 == (rc = pclose(fh))) {
-        fprintf(stderr, "Command '%s' failed upon pclose(): ", opt.run);
+        fprintf(stderr, "Command '%s' failed upon pclose(): ", cmd);
         perror(NULL);
         return;
     }
@@ -74,7 +86,7 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
     debug("command exited with status: %d\n", WEXITSTATUS(rc));
 
     if (rc) {
-        fprintf(stderr, "Command '%s' terminated with error code: %d", opt.run, WEXITSTATUS(rc));
+        fprintf(stderr, "Command '%s' terminated with error code: %d", cmd, WEXITSTATUS(rc));
         
         if (WIFSIGNALED(rc))
             fprintf(stderr, " (signaled with %d)", WTERMSIG(rc));
@@ -88,8 +100,9 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
 
 void run_command (xcb_get_property_reply_t *prop) {
     pid_t child;
+    const char *cmd = get_resource("run",NULL);
 
-    if (! (opt.run && strlen(opt.run))) return;
+    if (! (cmd && strlen(cmd))) return;
     if (!prop)                          return;
 
     int len   = xcb_get_property_value_length(prop);
@@ -97,7 +110,7 @@ void run_command (xcb_get_property_reply_t *prop) {
 
     switch(child = fork()) {
         case -1:
-            fprintf(stderr, "Failed to fork() to run command '%s': %s\n", opt.run, strerror(errno));
+            fprintf(stderr, "Failed to fork() to run command '%s': %s\n", cmd, strerror(errno));
             break;
 
         case 0:
@@ -141,14 +154,14 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
 
     if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
         debug("pasting string: '%*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
-        if (opt.o_stdout) {
+        if (resource_true("stdout")) {
             printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
 
-            if (opt.flush_stdout) 
+            if (resource_true("flush_stdout")) 
                 fflush(stdout);
         }
 
-        if (opt.run) {
+        if (get_resource("run",NULL)) {
             run_command(prop);
         }
 
@@ -182,99 +195,119 @@ void request_selection (xcb_atom_t selection) {
     free(reply);
 }
 
-int check_action (xcp_action_elem_t *action_list, xcp_action_elem_t *needle) {
-    for (; action_list->valid; action_list++) {
-        if (   needle->ks_string
-            && action_list->ks_string
-            && ((!action_list->mod_mask) || (action_list->mod_mask & needle->mod_mask))
-            && 0 == strcasecmp(needle->ks_string, action_list->ks_string)) 
-        {
-            return 1;
 
-        } else if (needle->button && action_list->button == needle->button) {
-            return 1;
-        }
+int action_matches (xcp_action_elem_t *action, xcp_action_elem_t *event) {
+    if (   event->ks_string
+        && action->ks_string
+        && ((!action->mod_mask) || (action->mod_mask & event->mod_mask))
+        && 0 == strcasecmp(event->ks_string, action->ks_string))
+    {
+        return 1;
+    }
+
+    if (   event->button
+        && action->button == event->button
+        && ((!action->mod_mask) || (action->mod_mask & event->mod_mask)))
+    {
+        return 1;
     }
 
     return 0;
 }
 
-xcp_action_t find_action (xcp_action_elem_t *needle) {
-    if (check_action(opt.act_clipboard, needle))
-        return XCP_ACTION_CLIPBOARD;
+void do_action (xcp_action_elem_t *event) {
+    xcp_action_elem_t *p = opt.action_handlers;
 
-    else if (check_action(opt.act_primary, needle))
-        return XCP_ACTION_PRIMARY;
-
-    else if (check_action(opt.act_exit, needle))
-        return XCP_ACTION_EXIT;
-
-    return XCP_ACTION_NONE;
-}
-
-void do_action (xcp_action_elem_t *act) {
-    switch (find_action(act)) {
-        case XCP_ACTION_CLIPBOARD:
-            debug("pasting from CLIPBOARD\n");
-            request_selection(xcp_atom[CLIPBOARD]);
-            break;
-
-        case XCP_ACTION_PRIMARY:
-            debug("pasting from PRIMARY\n");
-            request_selection(XCB_ATOM_PRIMARY);
-            break;
-
-        case XCP_ACTION_EXIT:
-            debug("exiting\n");
-            send_close_message();
-            break;
-
-        case XCP_ACTION_NONE:
-            break;
+    for (; p; p = p->next) {
+        if (action_matches(p, event)) {
+            p->handler();
+        }
     }
 }
 
-void compile_action (xcp_action_elem_t **act, const char *resource) {
-    const char *val = get_resource(resource,NULL);
-    int  count;
+
+void add_action (xcp_action_elem_t *action) {
+    xcp_action_elem_t *prev = NULL;
+    xcp_action_elem_t *p = opt.action_handlers;
+
+    if (!p) {
+        action->next = NULL;
+        opt.action_handlers = action;
+        return;
+    }
+
+    /* We want the entries with the most nr_mask_bits first in the list 
+     * so that we always check the most specific bindings first followed
+     * by the less specific.
+     *
+     * If we didn't do this we would match actions that the user didn't
+     * intend us to.  For example:
+     *   action.primary = 'ctrl+button2'
+     *   action.exit    = 'ctrl+shift+button2'
+     * If we weren't sorting this list and the action.primary came first
+     * in the list we would never exit on ctrl+shift+button2 as we would always
+     * match action.primary instead.
+     */
+    for (; p; p = p->next) {
+        if (action->nr_mask_bits >= p->nr_mask_bits) {
+            action->next = p;
+
+            if (prev)
+                prev->next = action;
+            else
+                opt.action_handlers = action;
+
+            break;
+        }
+        prev = p;
+    }
+
+    if (!p && prev) {
+        prev->next = action;
+    }
+}
+
+#define ADD_MASK(x) { \
+    action->mod_mask |= x; \
+    nr_bits++; \
+}
+void compile_action (const char *resource, xcp_action_callback_t handler) {
     char *buf = NULL;
     char *p, *ps, *q, *qs, *next;
+    int nr_bits;
+    xcp_action_elem_t *action;
 
-    if (! (act && val)) return;
+    if (! (resource && handler)) return;
     
-    buf = strdup(val);
-
-    for (count=1, p=buf; *p; p++)
-        if (*p == '|') count++; 
-
-    *act = xzmalloc(sizeof(xcp_action_elem_t) * (count+1));
-
-    xcp_action_elem_t *a = *act;
+    buf = strdup(resource);
+    //debug("compiling action: %s\n", buf);
 
     q = strtok_r(buf, "|", &qs);
-    while (q) {
-        p = strtok_r(q, "+-", &ps);
-        while (p) {
+    while (q && (p = strtok_r(q, "+-", &ps))) {
+        nr_bits = 0;
+        action = xzmalloc(sizeof(xcp_action_elem_t));
+
+        do {
             next = strtok_r(NULL, "+-", &ps);
 
             if (next) {
                 // p is a modifier key
                 if (0 == strcasecmp(p, "shift")) {
-                    a->mod_mask |= XCB_MOD_MASK_SHIFT;
+                    ADD_MASK(XCB_MOD_MASK_SHIFT);
                 } else if (0 == strcasecmp(p, "lock")) {
-                    a->mod_mask |= XCB_MOD_MASK_LOCK;
+                    ADD_MASK(XCB_MOD_MASK_LOCK);
                 } else if (0 == strcasecmp(p, "ctrl")) {
-                    a->mod_mask |= XCB_MOD_MASK_CONTROL;
+                    ADD_MASK(XCB_MOD_MASK_CONTROL);
                 } else if (0 == strcasecmp(p, "mod1")) {
-                    a->mod_mask |= XCB_MOD_MASK_1;
+                    ADD_MASK(XCB_MOD_MASK_1);
                 } else if (0 == strcasecmp(p, "mod2")) {
-                    a->mod_mask |= XCB_MOD_MASK_2;
+                    ADD_MASK(XCB_MOD_MASK_2);
                 } else if (0 == strcasecmp(p, "mod3")) {
-                    a->mod_mask |= XCB_MOD_MASK_3;
+                    ADD_MASK(XCB_MOD_MASK_3);
                 } else if (0 == strcasecmp(p, "mod4")) {
-                    a->mod_mask |= XCB_MOD_MASK_4;
+                    ADD_MASK(XCB_MOD_MASK_4);
                 } else if (0 == strcasecmp(p, "mod5")) {
-                    a->mod_mask |= XCB_MOD_MASK_5;
+                    ADD_MASK(XCB_MOD_MASK_5);
                 } else {
                     fprintf(stderr, "Unknown modifier: '%s' for %s\n", p, resource);
                 }
@@ -282,53 +315,43 @@ void compile_action (xcp_action_elem_t **act, const char *resource) {
             } else if (0 == strncasecmp(p, "button", 6)) {
                 // p is a mouse button
                 if (strlen(p) == 7) {
-                    a->button = atoi(p+6);
+                    action->button = atoi(p+6);
                 } else {
                     fprintf(stderr, "Unknown button: '%s' for %s\n", p, resource);
                 }
 
             } else {
                 // p is the key being modified
-                a->ks_string = strdup(p);
+                action->ks_string = strdup(p);
             }
+        } while ((p = next));
 
-            p=next;
-        }
+        action->nr_mask_bits = nr_bits;
+        action->handler = handler;
+        add_action(action);
 
         q = strtok_r(NULL, "|", &qs);
-        a->valid = 1;
-        a++;
-    }
-
-    for (a=*act; a->valid; a++) {
-        if (a->ks_string)
-            debug("%s: key: %s  mod: 0x%04x\n", resource, a->ks_string, a->mod_mask);
-        else
-            debug("%s: button: %d\n", resource, a->button);
     }
 
     free(buf);
 }
 
 void compile_actions () {
-    compile_action(&opt.act_clipboard, "action.clipboard");
-    compile_action(&opt.act_primary,   "action.primary");
-    compile_action(&opt.act_exit,      "action.exit");
-}
-
-void free_action (xcp_action_elem_t **act) {
-    if (!act) return;
-
-    xcp_action_elem_t *a = *act;
-    for (; a->valid; a++)
-        free(a->ks_string);
-
-    *act = NULL;
-    free(*act);
+    compile_action(get_resource("action.clipboard", NULL), act_clipboard);
+    compile_action(get_resource("action.primary", NULL), act_primary);
+    compile_action(get_resource("action.exit", NULL), act_exit);
 }
 
 void free_actions () {
-    free_action(&opt.act_clipboard);
-    free_action(&opt.act_primary);
-    free_action(&opt.act_exit);
+    xcp_action_elem_t *p = opt.action_handlers;
+    xcp_action_elem_t *q = NULL;
+
+    for (; p; q = p, p = p->next) {
+        if (q) free (q);
+        if (p->ks_string) free(p->ks_string);
+    }
+
+    if (q) free (q);
+
+    opt.action_handlers = NULL;
 }

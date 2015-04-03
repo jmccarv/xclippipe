@@ -34,7 +34,8 @@
 void debug (const char *fmt, ...) {
     va_list ap;
 
-    if (!opt.debug) return;
+    if (!resource_true("_debug")) 
+        return;
 
     fprintf(stderr, "%s: ", program_name);
     va_start(ap, fmt);

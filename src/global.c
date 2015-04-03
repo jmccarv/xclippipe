@@ -35,4 +35,4 @@ xcb_window_t     window;
 char             *program_name;
 
 xcb_atom_t xcp_atom[5];
-xcp_options_t opt = { 0, 0, 0, NULL, NULL, NULL, NULL, NULL };
+xcp_options_t opt = { NULL, NULL };
