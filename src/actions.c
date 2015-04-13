@@ -75,7 +75,7 @@ void do_child_command(xcb_get_property_reply_t *prop, int len) {
         return;
     }
     
-    fprintf(fh,"%*s%s", len,(char *)xcb_get_property_value(prop), opt.nl);
+    fprintf(fh,"%.*s%s", len,(char *)xcb_get_property_value(prop), opt.nl);
 
     if (-1 == (rc = pclose(fh))) {
         fprintf(stderr, "Command '%s' failed upon pclose(): ", cmd);
@@ -153,9 +153,9 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
     
 
     if (prop->type == XCB_ATOM_STRING && prop->format == 8) {
-        debug("pasting string: '%*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
+        debug("pasting string: '%.*s'\n", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop));
         if (resource_true("stdout")) {
-            printf("%*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
+            printf("%.*s%s", xcb_get_property_value_length(prop),(char *)xcb_get_property_value(prop), opt.nl);
 
             if (resource_true("flush_stdout")) 
                 fflush(stdout);
