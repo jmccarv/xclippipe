@@ -103,7 +103,7 @@ XColor *get_background_color (XColor *bg) {
 
 void set_window_state () {
     /* set window state */
-    xcb_atom_t state[2];
+    xcb_atom_t state[4];
     uint32_t   nr_state = 0;
 
     xcb_ewmh_connection_t ewmh;
@@ -121,6 +121,15 @@ void set_window_state () {
         xcb_ewmh_set_wm_desktop(&ewmh, window, 0xffffffff);
     }
 
+    if (resource_true("skip-taskbar")) {
+        debug("setting _NET_WM_STATE_SKIP_TASKBAR\n");
+        state[nr_state++] = ewmh._NET_WM_STATE_SKIP_TASKBAR;
+    }
+
+    if (resource_true("skip-pager")) {
+        debug("setting _NET_WM_STATE_SKIP_PAGER\n");
+        state[nr_state++] = ewmh._NET_WM_STATE_SKIP_PAGER;
+    }
 
     if (resource_true("above")) {
         debug("setting _NET_WM_STATE_ABOVE\n");
@@ -136,6 +145,7 @@ void set_window_state () {
 
     /* borderless? */
     if (resource_true("borderless")) {
+        debug("turning off borders\n");
         mwm_hints_t hints;
         hints.flags = MWM_HINTS_DECORATIONS;
         hints.decorations = MWM_DECOR_NONE;

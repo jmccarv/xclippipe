@@ -38,8 +38,11 @@ void usage (int status);
 
 static XrmOptionDescRec opTable[] = {
     { "-action.clipboard",  ".action.clipboard",    XrmoptionSepArg,    (XPointer) NULL  },
+    { "+action.clipboard",  ".action.clipboard",    XrmoptionNoArg,     (XPointer) ""    },
     { "-action.exit",       ".action.exit",         XrmoptionSepArg,    (XPointer) NULL  },
+    { "+action.exit",       ".action.exit",         XrmoptionNoArg,     (XPointer) ""    },
     { "-action.primary",    ".action.primary",      XrmoptionSepArg,    (XPointer) NULL  },
+    { "+action.primary",    ".action.primary",      XrmoptionNoArg,     (XPointer) ""    },
     { "-above",             ".above",               XrmoptionNoArg,     (XPointer) "on"  },
     { "+above",             ".above",               XrmoptionNoArg,     (XPointer) "off" },
     { "-background",        ".background",          XrmoptionSepArg,    (XPointer) NULL  },
@@ -58,11 +61,15 @@ static XrmOptionDescRec opTable[] = {
     { "-nl",                ".newline",             XrmoptionNoArg,     (XPointer) "on"  },
     { "+nl",                ".newline",             XrmoptionNoArg,     (XPointer) "off" },
     { "-newline",           ".newline",             XrmoptionNoArg,     (XPointer) "on"  },
-    { "+newline",           ".newline",             XrmoptionNoArg,     (XPointer) "off"  },
+    { "+newline",           ".newline",             XrmoptionNoArg,     (XPointer) "off" },
     { "-run",               ".run",                 XrmoptionSepArg,    (XPointer) NULL  },
     { "-r",                 ".run",                 XrmoptionSepArg,    (XPointer) NULL  },
     { "+run",               ".run",                 XrmoptionNoArg,     (XPointer) ""    },
     { "+r",                 ".run",                 XrmoptionNoArg,     (XPointer) ""    },
+    { "-skip-pager",        ".skip-pager",          XrmoptionNoArg,     (XPointer) "on"  },
+    { "+skip-pager",        ".skip-pager",          XrmoptionNoArg,     (XPointer) "off" },
+    { "-skip-taskbar",      ".skip-taskbar",        XrmoptionNoArg,     (XPointer) "on"  },
+    { "+skip-taskbar",      ".skip-taskbar",        XrmoptionNoArg,     (XPointer) "off" },
     { "-stdout",            ".stdout",              XrmoptionNoArg,     (XPointer) "on"  },
     { "+stdout",            ".stdout",              XrmoptionNoArg,     (XPointer) "off" },
     { "-s",                 ".stdout",              XrmoptionNoArg,     (XPointer) "on"  },
@@ -90,7 +97,7 @@ static xcp_help_t xcp_help[] = {
     { "-bg color",              "background",       "background color" },
     { "-background color",      "background",       "background color" },
     { "-/+below",               "below",            "turn on/off having window below other windows" },
-    { "-/+borderless",          "borderless",       "turn on/off window decorations" },
+    { "-/+borderless",          "borderless",       "turn off/on window decorations" },
     { "-display displayname",   "display",          "X server to contact" },
     { "-/+debug",               "",                 "turn on/off debugging output to stderr" },
     { "-/+flush-stdout",        "flush-stdout",     "turn on/off calling fflush on stdout after each paste" },
@@ -100,6 +107,8 @@ static xcp_help_t xcp_help[] = {
     { "-/+newline",             "newline",          "turn on off appending a newline when pasting" },
     { "-r/-run command",        "run",              "run this program on each paste action, passing the selection contents on stdin.  Set to empty string '' to disable running any commands" },
     { "+r/+run",                "run",              "do not run any commands.  Same as -run ''" },
+    { "-/+skip-pager",          "skip-pager",       "instruct window manager not to show this window on a pager" },
+    { "-/+skip-taskbar",        "skip-taskbar",     "instruct window manager not to show this window on a taskbar" },
     { "-/+stdout",              "stdout",           "turn on/off pasting to stdout" },
     { "-/+s",                   "sticky",           "turn on off sticky mode - window will appear on every desktop" },
     { "-title title",           "title",            "set window title" },
@@ -118,7 +127,8 @@ static char *_option_defaults[] = {
     "-stdout", "-flush-stdout", "-nl", 
     "-action.exit", "escape", 
     "-action.primary", "button2", 
-    "-action.clipboard", "ctrl+v"
+    "-action.clipboard", "ctrl+v",
+    "-skip-taskbar", "-skip-pager",
 };
 
 const char *_get_resource (const char *name, const char *class, int want_default) {
@@ -199,7 +209,9 @@ void load_resources (int *argc, char **argv) {
      * X server's resources 
      */
     X_opts = XrmGetStringDatabase(XResourceManagerString(dpy));
+    //XrmPutFileDatabase(X_opts, "/dev/stderr");
     XrmParseCommand(&opts, opTable, sizeof(opTable)/sizeof(XrmOptionDescRec), program_name, argc, argv);
+    //XrmPutFileDatabase(opts, "/dev/stderr");
 
     if (resource_true("above") && resource_true("below")) {
         fprintf(stderr, "-above and -below are mutually exclusive!\n");

@@ -10,7 +10,7 @@ OPTIONS:
   -bg color              background         background color
   -background color      background         background color
   -/+below               below              turn on/off having window below other windows
-  -/+borderless          borderless         turn on/off window decorations
+  -/+borderless          borderless         turn off/on window decorations
   -display displayname   display            X server to contact
   -/+debug                                  turn on/off debugging output to stderr
   -/+flush-stdout        flush-stdout       turn on/off calling fflush on stdout after each paste
@@ -20,6 +20,8 @@ OPTIONS:
   -/+newline             newline            turn on off appending a newline when pasting
   -r/-run command        run                run this program on each paste action, passing the selection contents on stdin.  Set to empty string '' to disable running any commands
   +r/+run                run                do not run any commands.  Same as -run ''
+  -/+skip-pager          skip-pager         instruct window manager not to show this window on a pager
+  -/+skip-taskbar        skip-taskbar       instruct window manager not to show this window on a taskbar
   -/+stdout              stdout             turn on/off pasting to stdout
   -/+s                   sticky             turn on off sticky mode - window will appear on every desktop
   -title title           title              set window title
@@ -81,12 +83,13 @@ regardless of what other modifiers are set
 (so it would also exit on ctrl+alt+d)
 
 Default Parameters:
-  -g 100x100 -bg black -title xclippipe -stdout -flush-stdout -nl -action.exit escape -action.primary button2 -action.clipboard ctrl+v
+  -g 100x100 -bg black -title xclippipe -stdout -flush-stdout -nl -action.exit escape -action.primary button2 -action.clipboard ctrl+v -skip-taskbar -skip-pager
 
 The defaults are used when no other resource of the same name
 is found either from the command line or from the
 X server (.Xresources, etc)
 
+------------------------------------------------------------------------------
 
 See also contrib/xclippipe_recv (installed in the same location as xclippipe)
 for an example script to use with xclippipe and an example configuration to
