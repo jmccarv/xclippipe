@@ -90,31 +90,34 @@ typedef struct xcp_help_t {
 } xcp_help_t;
 
 static xcp_help_t xcp_help[] = {
-    { "-action.clipboard",      "action.clipboard", "specify key and button presses which activate pasting from CLIPBOARD" },
-    { "-action.exit",           "action.exit",      "specify key and button presses which exit the program" },
-    { "-action.primary",        "action.primary",   "specify key and button presses which activate pasting from PRIMARY" },
-    { "-/+above",               "above",            "turn on/off having window on top of other windows" },
-    { "-bg color",              "background",       "background color" },
-    { "-background color",      "background",       "background color" },
-    { "-/+below",               "below",            "turn on/off having window below other windows" },
-    { "-/+borderless",          "borderless",       "turn off/on window decorations" },
-    { "-display displayname",   "display",          "X server to contact" },
-    { "-/+debug",               "",                 "turn on/off debugging output to stderr" },
-    { "-/+flush-stdout",        "flush-stdout",     "turn on/off calling fflush on stdout after each paste" },
-    { "-g/-geometry geom",      "geometry",         "size and position of window" },
-    { "-name programname"       "",                 "name of program - used when looking up X resources" },
-    { "-/+nl",                  "newline",          "turn on off appending a newline when pasting" },
-    { "-/+newline",             "newline",          "turn on off appending a newline when pasting" },
-    { "-r/-run command",        "run",              "run this program on each paste action, passing the selection contents on stdin.  Set to empty string '' to disable running any commands" },
-    { "+r/+run",                "run",              "do not run any commands.  Same as -run ''" },
-    { "-/+skip-pager",          "skip-pager",       "instruct window manager not to show this window on a pager" },
-    { "-/+skip-taskbar",        "skip-taskbar",     "instruct window manager not to show this window on a taskbar" },
-    { "-/+stdout",              "stdout",           "turn on/off pasting to stdout" },
-    { "-/+s",                   "sticky",           "turn on off sticky mode - window will appear on every desktop" },
-    { "-title title",           "title",            "set window title" },
-    { "-?/-h",                  "",                 "this help" },
-    { "-help",                  "",                 "full help including examples" },
-    { "-version",               "",                 "output version and exit" },
+    { "-action.clipboard events",   "action.clipboard", "specify events (key and button presses) which activate pasting from CLIPBOARD" },
+    { "-action.exit events",        "action.exit",      "specify events (key and button presses) which exit the program" },
+    { "-action.primary events",     "action.primary",   "specify events (key and button presses) which activate pasting from PRIMARY" },
+    { "+action.clipboard",          "action.clipboard", "disable pasting from CLIPBOARD, same as -action.clipboard ''" },
+    { "+action.exit",               "action.exit",      "disable exiting on an event, same as -action.exit ''" },
+    { "+action.primary",            "action.primary",   "disable pasting from PRIMARY, same as -action.primary ''" },
+    { "-/+above",                   "above",            "turn on/off having window on top of other windows" },
+    { "-bg color",                  "background",       "background color" },
+    { "-background color",          "background",       "background color" },
+    { "-/+below",                   "below",            "turn on/off having window below other windows" },
+    { "-/+borderless",              "borderless",       "turn off/on window decorations" },
+    { "-display displayname",       "display",          "X server to contact" },
+    { "-/+debug",                   "",                 "turn on/off debugging output to stderr" },
+    { "-/+flush-stdout",            "flush-stdout",     "turn on/off calling fflush on stdout after each paste" },
+    { "-g/-geometry geom",          "geometry",         "size and position of window" },
+    { "-name programname",          "",                 "name of program - used when looking up X resources" },
+    { "-/+nl",                      "newline",          "turn on/off appending a newline when pasting" },
+    { "-/+newline",                 "newline",          "turn on/off appending a newline when pasting" },
+    { "-r/-run command",            "run",              "run this program on each paste action, passing the selection contents on stdin.  Set to empty string '' to disable running any commands" },
+    { "+r/+run",                    "run",              "do not run any commands.  Same as -run ''" },
+    { "-/+skip-pager",              "skip-pager",       "instruct window manager not to show this window on a pager" },
+    { "-/+skip-taskbar",            "skip-taskbar",     "instruct window manager not to show this window on a taskbar" },
+    { "-/+stdout",                  "stdout",           "turn on/off pasting to stdout" },
+    { "-/+s",                       "sticky",           "turn on/off sticky mode - window will appear on every desktop" },
+    { "-title title",               "title",            "set window title" },
+    { "-?/-h",                      "",                 "this help" },
+    { "-help",                      "",                 "full help including examples" },
+    { "-version",                   "",                 "output version and exit" },
 };
 
 XrmDatabase default_opts = NULL;
@@ -262,13 +265,13 @@ void short_help (int include_resource_name) {
     printf("OPTIONS:\n");
 
     if (include_resource_name) {
-        printf("  %-22s %-18s Description\n", "Command Line Parameter", "X resource");
+        printf("  %-25s %-17s Description\n", "Command Line Parameter", "X resource");
         for (i=0; i < sizeof(xcp_help)/sizeof(xcp_help_t); i++) {
-            printf("  %-22s %-18s %s\n", xcp_help[i].option, xcp_help[i].xresource, xcp_help[i].help_text);
+            printf("  %-25s %-17s %s\n", xcp_help[i].option, xcp_help[i].xresource, xcp_help[i].help_text);
         }
     } else {
         for (i=0; i < sizeof(xcp_help)/sizeof(xcp_help_t); i++) {
-            printf("  %-22s %s\n", xcp_help[i].option, xcp_help[i].help_text);
+            printf("  %-25s %s\n", xcp_help[i].option, xcp_help[i].help_text);
         }
     }
 }
