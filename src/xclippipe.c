@@ -126,7 +126,7 @@ int xclippipe () {
 }
 
 int main (int argc, char **argv) {
-    char *argv0 = strdup(argv[0]);
+    char *argv0 = xstrdup(argv[0]);
     program_name = basename(argv0);
 
     xcp_init(&argc, argv);

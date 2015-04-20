@@ -279,7 +279,7 @@ void compile_action (const char *resource, xcp_action_callback_t handler) {
 
     if (! (resource && handler)) return;
     
-    buf = strdup(resource);
+    buf = xstrdup(resource);
     //debug("compiling action: %s\n", buf);
 
     q = strtok_r(buf, "|", &qs);
@@ -322,7 +322,7 @@ void compile_action (const char *resource, xcp_action_callback_t handler) {
 
             } else {
                 // p is the key being modified
-                action->ks_string = strdup(p);
+                action->ks_string = xstrdup(p);
             }
         } while ((p = next));
 
