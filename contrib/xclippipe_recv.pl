@@ -51,9 +51,12 @@ use strict;
 use warnings;
 
 my @input = <>;
+chomp $input[$#input] if @input;
 
-if ($input[0] =~ /https?:/) {
-    print STDERR "process_xclippipe: running google-chrome-stable @input\n";
+print STDERR "xclippipe_recv: selection=$ENV{XCP_SELECTION}\n";
+
+if ($input[0] =~ /https?:/i) {
+    print STDERR "xclippipe_recv: running google-chrome-stable '@input'\n";
     exec "google-chrome-stable", @input;
 }
 

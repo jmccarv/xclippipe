@@ -140,6 +140,12 @@ void ev_selection_notify (xcb_selection_notify_event_t *event) {
         return;
     }
 
+    if (event->selection == XCB_ATOM_PRIMARY) {
+        setenv("XCP_SELECTION","PRIMARY",1);
+    } else if (event->selection == xcp_atom[CLIPBOARD]) {
+        setenv("XCP_SELECTION","CLIPBOARD",1);
+    }
+
     /*
     debug("resp type=%d format=%d seq=%d length=%d type=%d bytes_after=%u value_len=%u\n", 
            prop->type, prop->format, prop->sequence, prop->length, prop->type, prop->bytes_after, prop->value_len);

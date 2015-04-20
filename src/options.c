@@ -300,8 +300,13 @@ void full_help () {
         "-name sets the program name that is used to look up X resources.\n"
         "If no -name is present on the command line, the name of this executable\n"
         "will be used.\n\n"
+        "If a process is run via -run, %s will populate the environment variable\n"
+        "XCP_SELECTION with the name of the X selection that was pasted from.\n"
+        "XCP_SELECTION will be set to one of:\n"
+        "  PRIMARY\n"
+        "  CLIPBOARD\n"
         "\nEXAMPLES\n"
-        , p, p
+        , p, p, p
     );
 
     printf(
