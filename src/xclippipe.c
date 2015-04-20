@@ -37,25 +37,23 @@
 #include <xcp_init.h>
 #include <xcp_util.h>
 
-
 void send_close_message () {
-    xcb_client_message_event_t *event = calloc(32, 1);
+    xcb_client_message_event_t event;
     
-    event->response_type  = XCB_CLIENT_MESSAGE;
-    event->format         = 32;
-    event->window         = window;
-    event->type           = xcp_atom[WM_PROTOCOLS];
-    event->data.data32[0] = xcp_atom[WM_DELETE_WINDOW];
+    event.response_type  = XCB_CLIENT_MESSAGE;
+    event.format         = 32;
+    event.window         = window;
+    event.type           = xcp_atom[WM_PROTOCOLS];
+    event.data.data32[0] = xcp_atom[WM_DELETE_WINDOW];
 
-    xcb_send_event(c, False, window, XCB_EVENT_MASK_NO_EVENT, (char *)event);
+    xcb_send_event(c, False, window, XCB_EVENT_MASK_NO_EVENT, (char *)&event);
     xcb_flush(c);
-
-    free(event);
 }
 
-/* terrible, I know */
-char modifier_state[64];
 char *get_modifier_state(uint16_t state) {
+    /* terrible, I know */
+    static char modifier_state[64];
+
     modifier_state[0] = '\0';
 
     if (state & XCB_KEY_BUT_MASK_SHIFT)    strcat(modifier_state,"shift+");
